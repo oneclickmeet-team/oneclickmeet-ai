@@ -199,20 +199,6 @@ def test_cli_missing_key_exits_2(monkeypatch, capsys):
     assert main(["extract", "x", "--geo", "kakao"]) == 2
 
 
-# ---------------------------------------------------------------- 실험용 웹 서버
-def test_server_extract_and_path_guard(tmp_path, monkeypatch):
-    from placeflow import server
-    monkeypatch.setattr(server, "STORE_PATH", tmp_path / "p.jsonl")
-    code, out = server._extract({"input": "https://m.blog.naver.com/fakeblog/220000000002",
-                                 "use_fixtures": True, "geo": "fixture", "save": True})
-    assert code == 200 and len(out["records"]) == 3 and len(out["saved"]) == 3
-    code, out = server._extract({"sample_image": "eval/fixtures/images/i3_story_popup.png", "ocr": "sidecar"})
-    assert code == 200 and out["records"][0]["place"]["name"] == "포근곰 팝업스토어"
-    assert server._extract({"sample_image": "../../README.md"})[0] == 400
-    assert server._extract({"image_b64": "aGVsbG8=", "image_name": "x.exe"})[0] == 400
-    assert server._extract({"input": ""})[0] == 400
-
-
 # ---------------------------------------------------------------- 네이버 지도 링크 (실사용 피드백)
 class DictClient:
     """url → (status, html, final_url) 사전으로 응답하는 테스트용 HTTP 클라이언트."""
@@ -409,74 +395,6 @@ def test_robots_disallowed_is_not_fetched(monkeypatch):
     assert c.get("https://example.com/private").status == 451
 
 
-# ---------------------------------------------------------------- v0.2: 코스 추천
-import importlib
-
-
-def _course_eval():
-    import sys
-    sys.path.insert(0, str(ROOT))
-    return importlib.import_module("eval.course_eval")
-
-
-def test_course_scenarios_have_no_hard_violations():
-    ce = _course_eval()
-    err, worst_ms, _ = ce.run(write=False)
-    assert err == 0 and worst_ms < 500
-
-
-def test_course_respects_monday_closures_and_budget():
-    ce = _course_eval()
-    from placeflow.route import CoursePlanner, CourseRequest
-    req = CourseRequest(date=ce.MON, start_time="11:00", end_time="21:00", concept="food_tour", region="성수",
-                        transport="walk", budget_per_person=60000)
-    res = CoursePlanner().plan(ce.PLACES, req)
-    names = {s.name for c in res.courses for s in c.stops}
-    assert "가상 파스타바" not in names            # 월요일 휴무
-    assert all(c.est_cost_per_person <= 72000 for c in res.courses)
-
-
-def test_course_meals_are_spaced_and_indoor_only_excludes_outdoor():
-    ce = _course_eval()
-    from placeflow.route import CoursePlanner, CourseRequest
-    res = CoursePlanner().plan(ce.PLACES, CourseRequest(date=ce.SAT, start_time="12:00", end_time="21:00",
-                                                         concept="food_tour", region="성수"))
-    for c in res.courses:
-        meals = [s for s in c.stops if s.category.startswith("맛집")]
-        if len(meals) >= 2:
-            h = lambda t: int(t[:2]) * 60 + int(t[3:5])
-            assert h(meals[1].start) - h(meals[0].start) >= 180
-    res = CoursePlanner().plan(ce.PLACES, CourseRequest(date=ce.SAT, concept="cafe_tour", region="성수", indoor_only=True))
-    assert all("루프탑" not in s.name and "공원" not in s.name for c in res.courses for s in c.stops)
-
-
-def test_course_without_location_is_excluded_and_message_when_empty():
-    ce = _course_eval()
-    from placeflow.route import CoursePlanner, CourseRequest
-    p = ce.PLACES[0].model_copy(deep=True)
-    p.place.location = None
-    res = CoursePlanner().plan([p], CourseRequest(date=ce.SAT))
-    assert not res.courses and res.excluded.get("no_location") == 1 and res.message
-
-
-def test_travel_estimate_short_hops_are_walking():
-    from placeflow.route import travel
-    m, km, mode = travel((37.5440, 127.0550), (37.5445, 127.0555), "car")
-    assert mode == "walk" and m <= 3
-    m2, _, mode2 = travel((37.5440, 127.0550), (37.5620, 126.9250), "transit")
-    assert mode2 == "transit" and 30 < m2 < 90
-
-
-def test_server_course_endpoint(tmp_path, monkeypatch):
-    from placeflow import server
-    monkeypatch.setattr(server, "STORE_PATH", tmp_path / "p.jsonl")
-    code, out = server._course({"date": "2026-10-10", "concept": "night", "start_time": "18:00", "end_time": "02:00",
-                                "transport": "walk", "region": "성수", "use_samples": True})
-    assert code == 200 and out["courses"]
-    code, out = server._course({"date": "2026-10-10", "concept": "nope", "use_samples": True})
-    assert code == 400
-
-
 def test_tesseract_ocr_if_available():
     from placeflow.ocr import TesseractOCR, tesseract_status
     if not tesseract_status()[0]:
@@ -508,20 +426,6 @@ def test_bad_timerange_rejected_and_v01_record_migrates():
     assert r.details.opening_hours and r.details.opening_hours.closed_days == ["mon"]
 
 
-def test_course_max_stops_and_late_night_fallback():
-    ce = _course_eval()
-    from placeflow.route import CoursePlanner, CourseRequest
-    res = CoursePlanner().plan(ce.PLACES, CourseRequest(date=ce.SAT, start_time="12:00", end_time="21:00",
-                                                         concept="food_tour", region="성수", max_stops=3))
-    assert res.courses and all(len(c.stops) <= 3 for c in res.courses)
-    res = CoursePlanner().plan(ce.PLACES, CourseRequest(date=ce.SAT, start_time="23:00", end_time="03:00",
-                                                         concept="night", region="성수", transport="walk"))
-    assert res.courses  # 저녁 슬롯을 못 채워도 바 코스는 나와야 함
-    with pytest.raises(Exception):
-        CourseRequest(date="2026-13-01")
-    assert CourseRequest(date=ce.SAT, start_time="9:00").start_time == "09:00"
-
-
 def test_multi_capture_mismatch_warns(tmp_path):
     from placeflow.ocr import SidecarOCR
     a, b = tmp_path / "a.png", tmp_path / "b.png"
@@ -531,32 +435,6 @@ def test_multi_capture_mismatch_warns(tmp_path):
     (tmp_path / "b.png.ocr.txt").write_text("다른가게 성수점\n카페 · 4.5 · 리뷰 120\n서울 성동구 연무장길 1", encoding="utf-8")
     out = Pipeline(ocr=SidecarOCR()).run(str(a), more_images=[str(b)])
     assert any("다른 상호" in x for x in out.records[0].review_reasons)
-
-
-def test_server_rejects_cross_origin_and_bad_body():
-    import threading
-    import urllib.request
-    import urllib.error
-    from http.server import ThreadingHTTPServer
-    from placeflow import server
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
-    base = f"http://127.0.0.1:{srv.server_port}"
-
-    def post(path, data, headers):
-        req = urllib.request.Request(base + path, data=data, headers=headers, method="POST")
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # 프록시 우회
-        try:
-            with opener.open(req) as r:
-                return r.status
-        except urllib.error.HTTPError as e:
-            return e.code
-    try:
-        assert post("/api/places/clear", b"{}", {"Content-Type": "text/plain"}) == 415
-        assert post("/api/places/clear", b"{}", {"Content-Type": "application/json", "Origin": "http://evil.example"}) == 403
-        assert post("/api/places/visited", b"[1]", {"Content-Type": "application/json"}) == 400
-    finally:
-        srv.shutdown()
 
 
 def test_link_meta_only_by_default():

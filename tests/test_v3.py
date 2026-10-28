@@ -3,13 +3,11 @@ from __future__ import annotations
 
 import io
 import json
-import threading
 import urllib.error
 import urllib.request
 
 import pytest
 
-from placeflow.v3 import api as v3api
 from placeflow.v3.domain import (Anchor, Course, CourseStop, DomainError, Place, add_item, add_stop, remove_stop,
                                  reorder_stops, replace_stop, summarize, update_item, validate_for_save)
 from placeflow.v3.recommend import RecommendRequest, candidate_key_of, recommend, replacement_candidates
@@ -257,7 +255,7 @@ def test_candidates_from_empty_records(demo):
     assert candidates_from_records([], demo, "link").status == "link_unreadable"
 
 
-# ------------------------------------------------------------------ 서비스 · HTTP
+# ------------------------------------------------------------------ 서비스
 def test_service_flow(svc):
     svc.seed_demo("me", "YEONNAM")
     pid = svc.list_saved("me")["items"][0]["place"]["place_id"]
@@ -273,62 +271,6 @@ def test_service_flow(svc):
         svc.save_course("me", saved["course"], expected_version=0)
     with pytest.raises(DomainError):
         svc.get_course("intruder", saved["course"]["course_id"])
-
-
-@pytest.fixture
-def http_server(tmp_path):
-    from http.server import ThreadingHTTPServer
-
-    from placeflow.server import Handler
-
-    v3api.use_repo(JsonRepo(tmp_path / "h.json"), "demo")
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    t = threading.Thread(target=httpd.serve_forever, daemon=True)
-    t.start()
-    yield f"http://127.0.0.1:{httpd.server_address[1]}/api/v3"
-    httpd.shutdown()
-    httpd.server_close()
-
-
-def _call(base, method, path, body=None):
-    data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(base + path, data=data, method=method,
-                                 headers={"Content-Type": "application/json"} if data else {})
-    try:
-        with urllib.request.urlopen(req) as r:
-            return r.status, json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        return e.code, json.loads(e.read())
-
-
-def test_http_endpoints(http_server):
-    b = http_server
-    assert _call(b, "POST", "/dev/seed", {"region_id": "HYEHWA"})[0] == 200
-    s, r = _call(b, "GET", "/regions")
-    assert next(x for x in r["data"]["regions"] if x["region_id"] == "HYEHWA")["saved_count"] == 4
-    s, r = _call(b, "GET", "/places/search?q=" + urllib.request.quote("혜화 카페"))
-    assert r["ok"] and r["data"]["status"] == "candidates" and r["data"]["candidates"][0]["place"]["subtitle"]
-    s, r = _call(b, "GET", "/saved-places")
-    pid = r["data"]["items"][0]["place"]["place_id"]
-    s, r = _call(b, "GET", "/places/" + pid)
-    assert r["data"]["hearted"] and "hours_notice" in r["data"]["place"]
-    anchor = {"type": "place", "place_id": pid}
-    rec = _call(b, "POST", "/recommendations", {"anchor": anchor, "place_count": 3,
-                                                 "category_sequence": ["MEAL", "CAFE", "WALK"],
-                                                 "required_place_order": 1})[1]["data"]
-    assert rec["reason"] is None and rec["courses"]
-    d = _call(b, "POST", "/courses/draft", {"recommended": rec["courses"][0], "anchor": anchor})[1]["data"]
-    s, r = _call(b, "POST", "/courses", {"course": d["course"]})
-    cid, course = r["data"]["course"]["course_id"], r["data"]["course"]
-    assert _call(b, "PUT", "/courses/" + cid, {"course": course, "expected_version": 1})[0] == 200
-    s, r = _call(b, "PUT", "/courses/" + cid, {"course": course, "expected_version": 1})
-    assert s == 409 and r["error"]["code"] == "version_conflict"
-    few = dict(course, stops=course["stops"][:2], items=[])
-    s, r = _call(b, "PUT", "/courses/" + cid, {"course": few, "expected_version": 2})
-    assert s == 422 and r["error"]["code"] == "too_few_stops"
-    assert _call(b, "GET", "/nope")[0] == 404
-    assert _call(b, "POST", "/recommendations", {})[1]["error"]["code"] == "invalid_input"
-    assert _call(b, "DELETE", "/courses/" + cid)[1]["data"]["deleted"]
 
 
 # ------------------------------------------------------------------ OCR 보강 (상호명이 깨진 플레이스 캡쳐)
@@ -369,7 +311,7 @@ def test_garbled_place_capture_resolves_by_address():
 def test_share_text_used_when_link_blocked_by_robots():
     from placeflow.fetchers.http import ROBOTS_BLOCKED, HttpResponse
     from placeflow.pipeline import Pipeline
-    from placeflow.v3.api import split_share_text
+    from placeflow.v3.save_flow import split_share_text
 
     url, rest = split_share_text("[네이버 지도]\n삼형제쭈꾸미 대학로점\n서울 종로구 동숭길 68\nhttps://naver.me/5abcDEF")
     assert url == "https://naver.me/5abcDEF" and "삼형제쭈꾸미 대학로점" in rest

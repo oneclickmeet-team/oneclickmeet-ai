@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 
-from ...v3.api import split_share_text
+from ...v3.save_flow import split_share_text
 from ...v3.recommend import replacement_candidates
 from ...v3.regions import get_region
 from ...v3.save_flow import candidates_from_records

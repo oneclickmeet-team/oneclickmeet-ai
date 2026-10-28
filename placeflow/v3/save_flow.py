@@ -30,6 +30,23 @@ MAX_OTHERS = 2              # 장소별 '다른 후보' 수
 
 MatchType = Literal["exact", "similar"]
 
+_URL_RE = re.compile(r"https?://[^\s<>\"']+")
+
+
+def split_share_text(raw: str) -> tuple[Optional[str], Optional[str]]:
+    """앱 '공유 → 복사' 문구(예: '[네이버 지도]\n삼형제쭈꾸미 대학로점\n서울 종로구 동숭길 68\nhttps://naver.me/x')
+    → (첫 번째 링크, 링크를 뺀 나머지 문구). 나머지 문구는 링크를 못 읽을 때 장소 정보로 쓰입니다."""
+    m = _URL_RE.search(raw or "")
+    if not m:
+        return None, None
+    rest = (raw[:m.start()] + " " + raw[m.end():]).strip()
+    header = re.match(r"^\[([^\]]{1,20})\]\s*", rest)
+    rest = rest[header.end():].strip() if header else rest  # '[네이버 지도]' 머리말 제거
+    lines = [l.strip() for l in rest.splitlines() if l.strip()]
+    if header and lines and len(lines[0]) <= 30 and not lines[0].startswith("📍"):
+        lines[0] = "📍 " + lines[0]  # 지도 앱 공유 문구의 첫 줄 = 상호명
+    return m.group(0).rstrip(").,"), ("\n".join(lines) or None)
+
 
 class Candidate(BaseModel):
     place: Place

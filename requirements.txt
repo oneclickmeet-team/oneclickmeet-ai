@@ -1,6 +1,11 @@
 # 필수
 pydantic>=2.5
 
+# AI 내부 서버 (placeflow.ai_api)
+fastapi>=0.110
+uvicorn>=0.27
+python-multipart>=0.0.9  # 스크린샷 업로드 (multipart/form-data)
+
 # 선택: 쓰는 LLM 제공자만 설치
 # openai>=1.40
 # anthropic>=0.40
@@ -13,3 +18,4 @@ pydantic>=2.5
 # 개발·테스트
 pytest
 jsonschema
+httpx  # FastAPI TestClient (tests/test_ai_api.py)
