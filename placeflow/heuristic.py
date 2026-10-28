@@ -307,6 +307,45 @@ def _one(name_raw: str, block: str, title: str, title_is_name: bool = False) -> 
     return rec
 
 
+# ---------------------------------------------------------------- 해시태그 (장소 표시가 없는 인스타 캡션)
+# 예: "#잠실맛집 #송리단길 #쿠차라 #배키욘방" → 지역 단서 '잠실', 장소 후보 쿠차라·배키욘방
+_GENERIC_TAG = re.compile(
+    r"맛집|추천|데이트|코스|투어|핫플|여행|먹스타|맛스타|먹방|일상|데일리|스타그램|그램|순례|가볼만한|나들이|모음|리스트|"
+    r"베스트|top|insta|food|daily|ootd|love|like|follow|selfie|reels?$", re.I)
+_CATEGORY_WORDS = ("카페", "술집", "식당", "밥집", "음식점", "디저트", "브런치", "빵집", "베이커리", "와인바", "바", "펍",
+                   "이자카야", "전시", "팝업", "놀거리", "역", "동", "길", "")
+HASHTAG_MAX = 10
+
+
+def _hashtag_places(text: str, title: str) -> list[dict]:
+    """장소 표시가 하나도 없을 때만: 지역·일반 태그를 빼고 남은 해시태그를 장소 이름 후보로."""
+    tags = list(dict.fromkeys(HASHTAG_RE.findall(f"{title}\n{text}")))
+    regions: list[str] = []
+    names: list[str] = []
+    for t in tags:
+        region = next((r for r in HOT_REGIONS if r in t), None)
+        rest = t.replace(region, "", 1) if region else t
+        if region:
+            regions.append(region)
+        if _GENERIC_TAG.search(t) or (region and rest in _CATEGORY_WORDS) or len(t) < 2 or t.isdigit():
+            continue
+        names.append(t)
+    if not names:
+        return []
+    region = max(dict.fromkeys(regions), key=regions.count) if regions else None  # 가장 많이 나온 지역 (동률이면 먼저 나온 것)
+    out = []
+    for name in names[:HASHTAG_MAX]:
+        p = _one(name, name, "")
+        if not p:
+            continue
+        p["region_hint"] = region
+        p["free_tags"] = []
+        p["confidence"] = 0.35
+        p["evidence"] = ["해시태그에서 찾은 이름: " + name] + ([f"지역 단서: {region}"] if region else [])
+        out.append(p)
+    return out
+
+
 class HeuristicExtractor:
     name = "heuristic"
     supports_vision = False
@@ -318,9 +357,12 @@ class HeuristicExtractor:
         title_is_name = 'type="naver_place"' in user_text
         places = []
         for name_raw, block in _blocks(text):
-            p = _one(name_raw, block, title if not name_raw else "", title_is_name)
+            # 제목으로 이름을 짐작하는 건 해시태그까지 본 뒤에 (인스타 og:title "Instagram의 ○○님: …" 은 상호명이 아님)
+            p = _one(name_raw, block, title if (title_is_name and not name_raw) else "", title_is_name)
             if p and all(p["name"] != q["name"] for q in places):
                 places.append(p)
+        if not places:  # 장소 표시가 없고 해시태그로만 가게를 적은 캡션
+            places = _hashtag_places(text, title)
         if not places and title:
             p = _one("", text, title, title_is_name)
             if p:

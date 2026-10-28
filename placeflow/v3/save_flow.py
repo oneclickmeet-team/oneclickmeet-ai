@@ -194,7 +194,9 @@ def match(name: str, branch: Optional[str], road: Optional[str], buildings: list
 
 def _queries(r: PlaceRecord, road: Optional[str], buildings: list[str], name_unsure: bool) -> list[str]:
     a = r.place.address
-    area = a.dong or a.sigungu or _sigungu(a.road) or ""
+    # 해시태그에서 찾은 이름은 주소가 없으므로 캡션의 지역 단서(#잠실맛집 → 잠실)로 검색 범위를 좁힘
+    hint = next((e.split(":", 1)[1].strip() for e in r.content.evidence if e.startswith("지역 단서:")), "")
+    area = a.dong or a.sigungu or _sigungu(a.road) or hint
     full = f"{r.place.name} {r.place.branch or ''}".strip()
     name_q = [f"{area} {full}", full]
     road_q = []

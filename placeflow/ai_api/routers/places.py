@@ -15,7 +15,7 @@ from ...v3.save_flow import candidates_from_records
 from ...v3.search import ExternalSearchError
 from ...v3.walking import walk_minutes
 from .. import convert
-from ..deps import get_pipeline, get_search, get_settings, ocr_gate
+from ..deps import get_pipeline, get_search, get_settings, get_tagger, ocr_gate
 from ..errors import ApiProblem, invalid, provider_unavailable
 from ..schemas import (CandidateSearchResponse, RecognitionRequest, RecognitionResponse, ReplacementCandidate,
                        ReplacementRequest, ReplacementResponse, SavedPlaceIn)
@@ -77,18 +77,24 @@ def place_candidates(query: Optional[str] = Query(None, max_length=100, descript
 
 
 # ------------------------------------------------------------------ P03 링크·텍스트 인식
-def _finish(out, kind: str, source_url: Optional[str], saved: list[SavedPlaceIn], search) -> RecognitionResponse:
+def _finish(out, kind: str, source_url: Optional[str], saved: list[SavedPlaceIn], search,
+            tagger=None) -> RecognitionResponse:
     res = candidates_from_records(out.records, search, kind, pipeline_message=out.message)
     if res.status == "search_failed":
         raise provider_unavailable()
-    return convert.recognition(res, source_url, saved)
+    tags, source = None, None
+    if tagger is not None:  # (확장) 블로그 태그. 실패해도 인식 결과는 그대로 돌려줌
+        tags, ok = tagger.tag_many(convert.recognition_places(res))
+        source = "NAVER_BLOG" if ok else None
+    return convert.recognition(res, source_url, saved, tags, source)
 
 
 @router.post("/place-recognitions", response_model=RecognitionResponse, summary="P03 링크·텍스트 인식")
-def place_recognitions(body: RecognitionRequest, search=Depends(get_search)):
+def place_recognitions(body: RecognitionRequest, search=Depends(get_search), tagger=Depends(get_tagger)):
     """링크·제목·공유 텍스트에서 검색어를 얻어 실제 장소 후보를 찾는다.
     링크는 robots.txt 를 지키며 **메타 정보(og:title·og:description)만** 읽고, 본문·가격·메뉴는 수집하지 않는다.
-    인식 불일치는 200 + NEEDS_SEARCH, 외부 검색 장애는 503. 저장하지 않는다."""
+    인식 불일치는 200 + NEEDS_SEARCH, 외부 검색 장애는 503. 저장하지 않는다.
+    (확장) 후보마다 네이버 블로그 제목·요약에서 센 리뷰 키워드 `tags` 를 붙인다 (블로그 검색 실패는 태그만 빈 목록)."""
     url_from_text, rest = split_share_text(body.shared_text or "")
     url = (body.source_url or "").strip() or url_from_text
     if url and not url.lower().startswith(("http://", "https://")):
@@ -98,7 +104,7 @@ def place_recognitions(body: RecognitionRequest, search=Depends(get_search)):
         raise invalid("sourceUrl 또는 sharedText 중 하나 이상이 필요합니다.", "sourceUrl")
     pipe = get_pipeline()
     out = pipe.run(url, text) if url else pipe.run(text)
-    return _finish(out, "link" if url else "text", url, body.saved_places, search)
+    return _finish(out, "link" if url else "text", url, body.saved_places, search, tagger)
 
 
 # ------------------------------------------------------------------ P04 스크린샷 인식
@@ -108,7 +114,7 @@ def place_image_recognitions(image: UploadFile = File(..., description="스크�
                                                                    description="(확장) 같은 장소의 추가 화면 최대 4장"),
                              shared_text: Optional[str] = Form(None, alias="sharedText",
                                                                description="(확장) 함께 붙여넣은 캡션"),
-                             search=Depends(get_search)):
+                             search=Depends(get_search), tagger=Depends(get_tagger)):
     """multipart/form-data. 이미지는 장당 최대 5MiB(AI_MAX_IMAGE_MB). 업로드 파일은 처리 후 바로 지운다."""
     files = [image] + list(extra_images or [])
     if len(files) > 1 + MAX_EXTRA_IMAGES:
@@ -139,7 +145,7 @@ def place_image_recognitions(image: UploadFile = File(..., description="스크�
     if not out.records and out.status.value == "failed" and "OCR" in (out.message or ""):
         # 서버에 OCR(tesseract+kor)·비전 LLM 이 없음 → 사용자 탓이 아닌 의존 서비스 문제
         raise ApiProblem(503, "EXTERNAL-0503", "RECOGNIZER_UNAVAILABLE", "이미지 인식 기능을 사용할 수 없습니다.")
-    return _finish(out, "screenshot", None, [], search)
+    return _finish(out, "screenshot", None, [], search, tagger)
 
 
 # ------------------------------------------------------------------ (확장) 교체 후보

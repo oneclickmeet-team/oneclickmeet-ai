@@ -16,7 +16,7 @@ from ..v3.domain import DomainError
 @dataclass(frozen=True)
 class Settings:
     api_key: Optional[str] = None                 # AI_SERVICE_KEY: 설정하면 X-AI-Key 헤더 필수
-    search: str = "auto"                          # SEARCH_PROVIDER: kakao | naver | demo | demo_fail (auto: 키 있는 것)
+    search: str = "auto"                          # SEARCH_PROVIDER: kakao | demo | demo_fail (auto: 카카오 키 있으면 kakao)
     llm: str = "heuristic"                        # AI_LLM: heuristic | openai | anthropic | gemini
     llm_model: Optional[str] = None               # AI_LLM_MODEL (없으면 PLACEFLOW_LLM_MODEL)
     ocr: str = "auto"                             # AI_OCR: auto | tesseract | none
@@ -51,6 +51,14 @@ def get_search():
     from ..v3.search import get_search_provider
 
     return get_search_provider(get_settings().search)
+
+
+@lru_cache
+def get_tagger():
+    """(확장) 블로그 태그. 네이버 키가 없거나 BLOG_TAGS=off 면 None → 태그 없이 응답."""
+    from ..v3.blog_tags import get_tagger as make
+
+    return make()
 
 
 _pipe_lock = threading.Lock()

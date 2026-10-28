@@ -67,6 +67,9 @@ class Place(BaseModel):
     map_url: Optional[str] = None
     provider: str = Field("naver_local", description="kakao_local | naver_local | demo | link")
     opening_hours: Optional[WeeklyHours] = None
+    tags: list[dict] = Field(default_factory=list,
+                             description="블로그 태그 [{label, mention_count}] (링크·스크린샷으로 찾을 때 붙음, 저장 시 함께 보관)")
+    tag_post_count: Optional[int] = Field(None, description="태그를 판단한 블로그 글 수. 태그를 구하지 않았으면 None")
 
     @property
     def pos(self) -> tuple[float, float]:

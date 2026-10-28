@@ -194,7 +194,9 @@ def test_heldout_regressions():
 
 
 def test_cli_missing_key_exits_2(monkeypatch, capsys):
+    import placeflow.envfile
     from placeflow.cli import main
+    monkeypatch.setattr(placeflow.envfile, "load_env", lambda *a, **k: [])  # 개발자 .env 의 실제 키 무시
     monkeypatch.delenv("KAKAO_REST_API_KEY", raising=False)
     assert main(["extract", "x", "--geo", "kakao"]) == 2
 

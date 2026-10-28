@@ -9,7 +9,7 @@ from ..v3.domain import Place
 from ..v3.recommend import RecommendResult
 from ..v3.save_flow import Candidate, ResolveResult
 from ..v3.walking import distance_m
-from .schemas import (CourseRecommendationResponse, CoursePlaceOut, PlaceCandidate, PlaceSnapshotIn,
+from .schemas import (CourseRecommendationResponse, CoursePlaceOut, PlaceCandidate, PlaceSnapshotIn, PlaceTag,
                       RecognitionCandidate, RecognitionGroup, RecognitionResponse, RecommendedCourseOut,
                       SavedPlaceIn, WalkingLegOut)
 
@@ -63,29 +63,41 @@ def candidate(p: Place, center: Optional[tuple[float, float]] = None,
                saved_place_id=find_saved(p, saved) if saved else None, **extra)
 
 
-def _rcand(c: Candidate, saved: list[SavedPlaceIn]) -> RecognitionCandidate:
+def _rcand(c: Candidate, saved: list[SavedPlaceIn], tags: Optional[dict] = None) -> RecognitionCandidate:
+    t = (tags or {}).get(c.place.place_id)
     return candidate(c.place, saved=saved, cls=RecognitionCandidate,
-                     match_type="EXACT" if c.match_type == "exact" else "SIMILAR", match_reasons=c.reasons)
+                     match_type="EXACT" if c.match_type == "exact" else "SIMILAR", match_reasons=c.reasons,
+                     tags=[PlaceTag(label=l, mention_count=n) for l, n in t.tags] if t else [],
+                     tag_post_count=t.post_count if t else None)
 
 
-def recognition(res: ResolveResult, source_url: Optional[str], saved: list[SavedPlaceIn]) -> RecognitionResponse:
+def recognition_places(res: ResolveResult) -> list[Place]:
+    """태그를 붙일 장소: 묶음별 best → others, 그다음 나머지 후보 (응답 순서와 같게)."""
+    out = []
+    for g in res.groups:
+        out += ([g.best.place] if g.best else []) + [o.place for o in g.others]
+    return out + [c.place for c in res.candidates]
+
+
+def recognition(res: ResolveResult, source_url: Optional[str], saved: list[SavedPlaceIn],
+                tags: Optional[dict] = None, tag_source: Optional[str] = None) -> RecognitionResponse:
     """내부 상태 → TRD 상태: 후보 있음 CANDIDATES_FOUND / 그 밖(인식 실패·일치 없음·링크 못 읽음) NEEDS_SEARCH.
-    외부 검색 장애(search_failed)는 호출하는 쪽에서 503 으로 바꿈."""
+    외부 검색 장애(search_failed)는 호출하는 쪽에서 503 으로 바꿈. tags = {place_id: PlaceTags} (확장)."""
     groups = []
     for g in res.groups:
         groups.append(RecognitionGroup(
             order=g.extracted.order, extracted_name=g.extracted.name + (f" {g.extracted.branch}" if g.extracted.branch else ""),
             extracted_address=g.extracted.address_hint,
             status={"matched": "MATCHED", "similar_only": "SIMILAR_ONLY"}.get(g.status, "NOT_FOUND"),
-            best=_rcand(g.best, saved) if g.best else None, others=[_rcand(o, saved) for o in g.others]))
-    cands = [_rcand(c, saved) for c in res.candidates]
+            best=_rcand(g.best, saved, tags) if g.best else None, others=[_rcand(o, saved, tags) for o in g.others]))
+    cands = [_rcand(c, saved, tags) for c in res.candidates]
     found = bool(cands)
     msg = res.message if not found else None
     if not found and not msg:
         msg = "장소를 직접 검색해 확인해 주세요."
     return RecognitionResponse(status="CANDIDATES_FOUND" if found else "NEEDS_SEARCH",
                                extracted_query=res.suggested_query, candidates=cands, source_url=source_url,
-                               message=msg, groups=groups)
+                               message=msg, groups=groups, tag_source=tag_source if cands else None)
 
 
 def recommendation(res: RecommendResult, by_key: dict[str, SavedPlaceIn]) -> CourseRecommendationResponse:

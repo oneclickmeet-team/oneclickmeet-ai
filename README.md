@@ -1,8 +1,8 @@
-# placeflow — OneClickMeet AI 워크플로우 v2.0
+# placeflow — OneClickMeet AI 워크플로우 v2.1
 
 20대 커플이 인스타그램·네이버에서 본 장소를 **링크·스크린샷·직접 검색**으로 저장하고,
 저장한 장소를 기준으로 **걸어서 다니는 데이트 코스**를 추천하는 AI 워크플로우입니다.
-유료 데이터 API 없이 동작합니다(링크 메타 정보 + 무료 OCR + 카카오 로컬 또는 네이버 지역검색 무료 키). LLM 은 선택 사항입니다.
+유료 데이터 API 없이 동작합니다(링크 메타 정보 + 무료 OCR + 카카오 로컬·네이버 블로그 검색 무료 키). 장소 태그 판단에만 OpenAI(유료)를 쓰고, 키가 없으면 태그 없이 동작합니다.
 
 > **버전 표기:** 이 저장소의 버전(**v1.x · v2.x**)은 **AI 워크플로우 버전**입니다.
 > 코드·문서에 나오는 "V3"는 기준으로 삼은 **Figma 와이어프레임 버전**(`와이어프레임(mid-fi) › V3 - 재원` 확정 IA)을 가리킵니다.
@@ -18,10 +18,21 @@
 ```
 - 연결: **상태 없는 AI 내부 API** `/internal/v1/*` (camelCase · ProblemDetail). Spring 이 저장 장소를 요청에 담아 보내고, AI 는 결과만 돌려줍니다. → **[docs/API_CONVENTION.md](docs/API_CONVENTION.md)**
 - 카테고리 코드 7개: `MEAL` · `CAFE` · `BAR` · `ACTIVITY` · `CULTURE` · `WALK` · `SHOPPING`
-- 장소 검색: `SEARCH_PROVIDER=kakao`(카카오 로컬, 좌표 검색 지원) 또는 `naver`(네이버 지역검색). 하나만 씁니다. 키가 없으면 가상 데모 데이터.
+- 장소 검색: **카카오 로컬**(좌표 검색 지원). 키가 없으면 가상 데모 데이터.
+- 장소 태그: **네이버 블로그 검색**의 제목·요약을 **OpenAI**가 읽고 태그 12개("뷰가 좋아요" 등) 중 해당하는 것을 골라, 글 수가 많은 상위 5개. 사용자 선택 집계는 Spring 이 DB로 처리합니다.
 - 코드: AI 로직 `placeflow/v3/` · AI 내부 서버(FastAPI) `placeflow/ai_api/`
 
 ## 버전 기록
+
+### v2.1 (2026-10-28) — 장소 태그(네이버 블로그 + OpenAI) · 장소 검색 카카오 고정
+- **장소 태그**: P03·P04 후보마다 `tags`(`label`·`mentionCount`)·`tagPostCount`, 응답에 `tagSource`를 붙입니다.
+  - 태그는 팀이 정한 12개입니다(모든 카테고리 공통): 뷰가 좋아요 · 컨셉이 독특해요 · 사진이 잘나와요 · 차분한 분위기에요 · 야외공간이 멋져요 · 아늑해요 · 혼술하기 좋아요 · 집중하기 좋아요 · 음식이 맛있어요 · 양이 많아요 · 특별한 메뉴가 있어요 · 디저트가 맛있어요. 목록과 LLM 용 설명은 `placeflow/v3/review_tags.json`에 있습니다.
+  - '가게 이름 + 동네'로 블로그를 검색해 가게 이름이 나온 글의 제목·요약만 OpenAI(기본 `gpt-4o-mini`, `TAG_LLM_MODEL`)에 보냅니다. 글마다 그 가게를 긍정적으로 말하는 태그만 고르고, 태그별 글 수를 셉니다.
+  - 블로그 검색·OpenAI 가 실패해도 인식 결과는 그대로 오고 태그만 비어 있습니다(규칙 기반으로 대신하지 않음). 네이버·OpenAI 키가 없으면 태그 기능이 꺼집니다(`BLOG_TAGS=off`로도 끔).
+  - 우리 앱 사용자가 고른 태그 집계(C 방식의 B 단계)는 Spring 이 처리합니다.
+- **장소 검색은 카카오로 고정**: 네이버 지역검색 제공자를 뺐습니다(`SEARCH_PROVIDER`: `kakao` · `demo` · `demo_fail`). 네이버 키는 블로그 태그에만 씁니다.
+- **해시태그로만 가게를 적은 캡션**도 읽습니다(예: `#잠실맛집 #송리단길 #쿠차라 #배키욘방`). 번호 목록·📍 같은 장소 표시가 없을 때만, 맛집·추천·데이트 같은 일반 태그와 지역 태그를 빼고 남은 해시태그를 장소 이름으로 보고, 지역 태그(#잠실맛집 → 잠실)를 검색어에 붙여 카카오에서 찾습니다. 진짜 고정 댓글은 로그인이 필요해 자동으로 읽지 못하므로 복사해 붙여넣거나 스크린샷으로 넣습니다.
+- `/health`에 `tagProvider`를 추가했고, 워크플로우 버전은 `2.1`입니다.
 
 ### v2.0 (2026-10-20) — TRD v1.0 반영
 - **AI 내부 API를 TRD 형식으로**
@@ -113,7 +124,8 @@ python3 -m placeflow api --port 8001               # → http://127.0.0.1:8001/d
 # 배포: uvicorn placeflow.ai_api.main:app --host 0.0.0.0 --port 8001   (AI_SERVICE_KEY 설정 권장)
 ```
 - 엔드포인트·DTO·오류 코드: [docs/API_CONVENTION.md](docs/API_CONVENTION.md), 명세 파일 [docs/openapi.json](docs/openapi.json)
-- 장소 검색: `.env`에 `SEARCH_PROVIDER=kakao` + `KAKAO_REST_API_KEY` (또는 `naver` + 네이버 키)
+- 장소 검색: `.env`에 `SEARCH_PROVIDER=kakao` + `KAKAO_REST_API_KEY`
+- 장소 태그(선택): `.env`에 `NAVER_CLIENT_ID` + `NAVER_CLIENT_SECRET` (NAVER API HUB, 검색 > 블로그) + `OPENAI_API_KEY`, `pip install openai`
 - 스크린샷을 처리하려면 서버에 `tesseract` + 한국어 데이터가 있어야 합니다(아래).
 
 ## 무료 OCR 설치 (캡쳐 읽기)
@@ -131,7 +143,7 @@ python -m placeflow serve          # → 브라우저에서 http://127.0.0.1:800
   - 장소 추가: 링크(또는 앱 공유 문구)·스크린샷·직접 검색 → 인식 중 → 후보 확인(장소별 묶음, 여러 곳 저장) → 실패 화면
   - 보관함: 목록·간이 지도, 하트, 장소 상세(원본 링크·운영시간 안내·내 메모·주변 놀거리)
   - 코스 추천: 기준 선택 → 조건 확인 → 로딩 3단계 → 코스 1/2/3 → 코스 상세(항목·금액·메모) → 편집 → 저장
-  - 마이: 검색 제공자(자동·네이버·데모·실패 흉내), 추출기(LLM·OCR), 데모 보관함 채우기, 실험 데이터 초기화
+  - 마이: 검색 제공자(자동·카카오·데모·실패 흉내), 추출기(LLM·OCR), 데모 보관함 채우기, 실험 데이터 초기화
   - 저장 위치: `data/v3.json` (`PLACEFLOW_V3_DB`로 변경 가능)
 - **`/legacy` — v0.2 화면**: ① 장소 저장(장소 카드·JSON·실행 단계) / ② 컨셉 코스 추천. 저장 위치는 `data/places.jsonl`
 - 127.0.0.1 에서만 열리는 실험용 서버입니다.
@@ -207,7 +219,8 @@ placeflow/
     save_flow.py   후보 찾기 (장소별 묶음 · 확실한 일치/비슷한 이름 판정)
     recommend.py   추천 엔진 v2 (카테고리 순서·필수 장소 위치) · 교체 후보 · 주변 놀거리
     domain.py      코스·항목 모델과 편집·검증·요약 순수 함수
-    search.py      카카오 로컬 · 네이버 지역검색(API HUB / 기존 키) · 데모 검색 (SEARCH_PROVIDER)
+    search.py      카카오 로컬 · 데모 검색 (SEARCH_PROVIDER)
+    blog_tags.py   네이버 블로그 검색(API HUB / 기존 키) → OpenAI 태그 판단 · review_tags.json  태그 12개와 설명
     repo.py        실험용 JSON 저장소 (DB 구현 시 같은 메서드로 교체)
     categories.py  카테고리 코드 7개 · category_infer.py  저장 장소 카테고리 추론
     walking.py     도보 시간 추정 · regions.py  지원 지역 6곳
@@ -215,6 +228,11 @@ eval/              평가 정답셋(가상 데이터) · 픽스처 생성기 · 
 schema/            내보낸 JSON Schema · 택소노미 · 예시
 tests/             pytest (fixtures/ 실제 캡션 사례)
 ```
+
+## 알려진 한계 (v2.1)
+- 태그 판단에 OpenAI(유료)를 씁니다. 장소 1곳당 1회 호출하고, 같은 가게는 24시간 동안 다시 호출하지 않습니다.
+- 태그는 네이버의 실제 리뷰 선택 횟수가 아니라 **블로그 제목·요약을 LLM 이 판단한 글 수**입니다. 요약이 짧아서 블로그 글이 적은 가게는 태그가 비거나 적습니다.
+- 네이버 블로그 검색도 실제 키로는 호출을 확인하지 못했습니다(가짜 HTTP 응답으로 테스트).
 
 ## 알려진 한계 (v2.0)
 - 카카오·네이버 실제 키로는 개발 환경에서 호출을 확인하지 못했습니다. 응답 파싱은 공개 문서 기준이고, 테스트는 가짜 HTTP 응답으로 했습니다.

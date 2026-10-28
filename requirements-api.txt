@@ -5,3 +5,4 @@ fastapi>=0.110,<1.0
 uvicorn>=0.29,<1.0
 python-multipart>=0.0.9
 httpx>=0.27   # 테스트(TestClient)용
+openai>=1.40  # 장소 태그 판단 (OPENAI_API_KEY)
