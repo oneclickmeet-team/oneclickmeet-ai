@@ -21,16 +21,35 @@ PRICE_RE = re.compile(r"(?<![\d가-힣A-Za-z])([가-힣A-Za-z][가-힣A-Za-z ]{0
 HASHTAG_RE = re.compile(r"#([가-힣A-Za-z0-9_]+)")
 MARKER_RE = re.compile(r"^\s*(?:📍|📌|🏠|(?:\d+[.)]\s*)?(?:상호명?|가게명?|장소|매장명?)\s*[:：])\s*(.+)$", re.M)
 NUMBERED_RE = re.compile(r"^\s*(\d{1,2})[.)]\s+(.{2,30})$", re.M)
+KEYCAP_RE = re.compile(r"(?:[0-9]\ufe0f?\u20e3)+|\U0001F51F")  # 1️⃣ · 1️⃣1️⃣ · 🔟
+PIN_TAG_RE = re.compile(r"📍\s*#([가-힣A-Za-z0-9_]+)")  # "방이동📍#평화연남"
+PAREN_ITEM_RE = re.compile(r"^\s*\(\d{1,2}\)\s*([가-힣A-Za-z0-9 ]{2,20})", re.M)  # "(1) 꿀돼지집✅ 급랭삼겹살"
+NOT_PLACE_MARK = re.compile(r"역\s*\d+\s*번|번\s*출구|^#")  # "📍잠실역 10번출구" 는 위치 안내
+UI_TEXT_RE = re.compile(r"^(?:댓글|시청자)\s*(?:추가|달기|추천|보기)|^(?:팔로우|팔로잉|좋아요|공유하기|더\s*보기|번역\s*보기|메시지\s*보내기)")
 TAG_RE = re.compile(r"<(title|content|user_note)>\n?(.*?)\n?</\1>", re.S)
 
 HOT_REGIONS = [
     "성수", "연남", "망원", "합정", "홍대", "익선", "을지로", "한남", "이태원", "압구정", "신사", "가로수길",
     "청담", "문래", "삼청", "서촌", "북촌", "잠실", "송리단길", "용산", "해방촌", "건대", "강남", "여의도",
     "해운대", "광안리", "전포", "애월", "성산", "협재", "경주", "강릉", "전주", "속초", "여수",
+    "혜화", "대학로", "종로", "방이", "석촌", "상수", "신촌", "성신여대", "한성대",
 ]
 
 LABEL_LINE = re.compile(r"^\s*(?:주소|위치|영업시간|운영시간|휴무|전화|메뉴|가격|주차|예약)\s*[:：]", re.M)
 TITLE_NOISE = re.compile(r"\[[^\]]*\]|\([^)]*\)|[:|]\s*네이버.*$|네이버 블로그|on Instagram.*$|후기|리뷰|내돈내산|추천|데이트|맛집|카페투어|솔직", re.I)
+
+
+def find_region(text: str) -> str | None:
+    """글에서 가장 많이 나온 동네 이름 (같으면 먼저 나온 것). 스크린샷의 게시물 설명은 OCR 이 잘 읽음."""
+    found = [(text.count(r), -text.find(r), r) for r in HOT_REGIONS if r in text]
+    return max(found)[2] if found else None
+
+
+def _normalize_keycaps(text: str) -> str:
+    """이모지 번호를 번호 목록 형식으로: '1️⃣1️⃣ 쪼리닭' → '11. 쪼리닭'."""
+    def repl(m: re.Match) -> str:
+        return "10." if m.group(0) == "\U0001F51F" else "".join(c for c in m.group(0) if c.isdigit()) + "."
+    return KEYCAP_RE.sub(repl, text)
 
 
 def _parse_user_text(user_text: str) -> dict:
@@ -51,7 +70,10 @@ def _split_name_branch(raw: str) -> tuple[str, str | None]:
 
 def _blocks(text: str) -> list[tuple[str, str]]:
     """(이름 후보, 블록 텍스트) 목록. 장소 표시(📍, '상호:')가 여러 개면 장소별로 나눕니다."""
-    marks = list(MARKER_RE.finditer(text))
+    pin_tags = list(PIN_TAG_RE.finditer(text))
+    marks = [m for m in MARKER_RE.finditer(text) if not NOT_PLACE_MARK.search(m.group(m.lastindex).strip())]
+    marks += pin_tags + list(PAREN_ITEM_RE.finditer(text)) if marks or pin_tags else []
+    marks.sort(key=lambda m: m.start())
     if not marks:
         nums = [m for m in NUMBERED_RE.finditer(text) if not LABEL_LINE.match(m.group(0))]
         if len(nums) >= 2:
@@ -312,7 +334,7 @@ def _one(name_raw: str, block: str, title: str, title_is_name: bool = False) -> 
 _GENERIC_TAG = re.compile(
     r"맛집|추천|데이트|코스|투어|핫플|여행|먹스타|맛스타|먹방|일상|데일리|스타그램|그램|순례|가볼만한|나들이|모음|리스트|"
     r"베스트|top|insta|food|daily|ootd|love|like|follow|selfie|reels?$", re.I)
-_CATEGORY_WORDS = ("카페", "술집", "식당", "밥집", "음식점", "디저트", "브런치", "빵집", "베이커리", "와인바", "바", "펍",
+_CATEGORY_WORDS = ("카페", "술집", "식당", "밥집", "고기집", "음식점", "디저트", "브런치", "빵집", "베이커리", "와인바", "바", "펍",
                    "이자카야", "전시", "팝업", "놀거리", "역", "동", "길", "")
 HASHTAG_MAX = 10
 
@@ -327,7 +349,7 @@ def _hashtag_places(text: str, title: str) -> list[dict]:
         rest = t.replace(region, "", 1) if region else t
         if region:
             regions.append(region)
-        if _GENERIC_TAG.search(t) or (region and rest in _CATEGORY_WORDS) or len(t) < 2 or t.isdigit():
+        if _GENERIC_TAG.search(t) or (region and rest in _CATEGORY_WORDS) or len(t) < 2 or t.isdigit() or "_" in t:
             continue
         names.append(t)
     if not names:
@@ -352,7 +374,7 @@ class HeuristicExtractor:
 
     def extract(self, system: str, user_text: str, images, schema: dict) -> dict:
         parts = _parse_user_text(user_text)
-        text = "\n".join(p for p in (parts["content"], parts["user_note"]) if p)
+        text = _normalize_keycaps("\n".join(p for p in (parts["content"], parts["user_note"]) if p))
         title = parts["title"]
         title_is_name = 'type="naver_place"' in user_text
         places = []
@@ -363,7 +385,8 @@ class HeuristicExtractor:
                 places.append(p)
         if not places:  # 장소 표시가 없고 해시태그로만 가게를 적은 캡션
             places = _hashtag_places(text, title)
-        if not places and title:
+        # 인스타 og:title("Instagram의 ○○님: …")은 상호명이 아님
+        if not places and title and 'type="instagram_link"' not in user_text:
             p = _one("", text, title, title_is_name)
             if p:
                 places.append(p)
@@ -374,4 +397,8 @@ class HeuristicExtractor:
             if p:
                 p["confidence"] = 0.45
                 places.append(p)
+        places = [p for p in places if not UI_TEXT_RE.search(p["name"])]
+        region = find_region(text)
+        for p in places:
+            p["region_hint"] = p.get("region_hint") or region
         return {"places": places, "is_place_content": bool(places), "notes": "heuristic"}

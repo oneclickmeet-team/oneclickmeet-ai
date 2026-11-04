@@ -294,9 +294,9 @@ def test_garbled_place_capture_resolves_by_address():
     assert out.records and out.records[0].place.address.road == "서울 종로구 동숭길 68"
 
     target = Place(place_id="nv_x", name="삼형제쭈꾸미 대학로점", category="restaurant", category_label="맛집",
-                   road_address="서울특별시 종로구 동숭길 68", lat=37.5826, lng=127.0023, provider="naver_local")
+                   road_address="서울특별시 종로구 동숭길 68", lat=37.5826, lng=127.0023, provider="kakao_local")
     other = Place(place_id="nv_y", name="동숭길 카페", category="cafe", road_address="서울특별시 종로구 동숭길 12",
-                  lat=37.58, lng=127.0, provider="naver_local")
+                  lat=37.58, lng=127.0, provider="kakao_local")
 
     class Fake:
         name = "fake"
@@ -337,7 +337,7 @@ def _jamsil_db():
 
     def P(i, name, road, cat="restaurant"):
         return Place(place_id=i, name=name, road_address=road, category=cat, lat=37.51, lng=127.11,
-                     provider="naver_local")
+                     provider="kakao_local")
     return [P("a", "오지다", "서울특별시 송파구 백제고분로48길 24"),
             P("b", "회포차오지다", "서울특별시 송파구 가락로 241 1층"),
             P("c", "닭튜브 방이점", "서울특별시 송파구 백제고분로48길 7 1층"),
@@ -575,3 +575,94 @@ def test_instagram_link_hashtag_caption_from_og_meta():
 
     recs = Pipeline(http=Client()).run("https://www.instagram.com/p/CAch34iB5RW/?utm_source=ig_web_copy_link").records
     assert [r.place.name for r in recs][:3] == ["장미맨숀", "쿠차라", "배키욘방"] and len(recs) == 9
+
+
+# ---------------------------------------------------------------- 후보 찾기: 오독 보정 · 다른 지역
+def _rec(name, road=None, region=None):
+    from placeflow import Pipeline
+
+    class LLM:
+        supports_vision, model = True, "v0"
+        name = "x"
+
+        def extract(self, *a):
+            return {"places": [{"name": name_, "address_hint": road, "region_hint": region, "confidence": 0.9}]}
+
+    name_ = name
+    return Pipeline(llm=LLM()).run("텍스트").records
+
+
+def _found(*places):
+    class S:
+        name = "fake"
+
+        def search(self, q, n=5):
+            return list(places)
+
+    return S()
+
+
+def test_misread_name_is_fixed_by_address():
+    from placeflow.v3.save_flow import candidates_from_records
+
+    p = Place(place_id="a", name="가우동", road_address="서울 종로구 대학로9길 25", lat=37.5, lng=127.0, provider="kakao_local")
+    g = candidates_from_records(_rec("가우뚱", "서울 종로구 대학로9길 25"), _found(p), "screenshot").groups[0]
+    assert g.status == "matched" and g.best.place.name == "가우동" and "이름이 비슷해요" in g.best.reasons
+
+
+def test_other_store_at_same_address_is_not_default():
+    from placeflow.v3.save_flow import candidates_from_records
+
+    p = Place(place_id="a", name="완전다른집", road_address="서울 종로구 대학로9길 25", lat=37.5, lng=127.0, provider="kakao_local")
+    g = candidates_from_records(_rec("가우동", "서울 종로구 대학로9길 25"), _found(p), "screenshot").groups[0]
+    assert g.best is None and g.others[0].match_type == "similar" and "주소만 일치" in g.others[0].reasons
+
+
+def test_same_name_in_other_region_is_not_default():
+    from placeflow.v3.save_flow import candidates_from_records
+
+    far = Place(place_id="a", name="미자식당", road_address="경기 이천시 향교로 84", lat=37.2, lng=127.4, provider="kakao_local")
+    near = Place(place_id="b", name="미자식당", road_address="서울 송파구 석촌호수로 1", lat=37.5, lng=127.1, provider="kakao_local")
+    g = candidates_from_records(_rec("미자식당", None, "잠실"), _found(far), "screenshot").groups[0]
+    assert g.best is None and "다른 지역" in g.others[0].reasons
+    g = candidates_from_records(_rec("미자식당", None, "잠실"), _found(far, near), "screenshot").groups[0]
+    assert g.best.place.place_id == "b"
+
+
+def test_spaced_road_name_matches():
+    from placeflow.v3.save_flow import _road_core
+
+    assert _road_core("서울 마포구 와우산로 21길 28-6") == _road_core("서울 마포구 와우산로21길 28-6")
+
+
+def test_address_outside_post_region_is_ignored():
+    from placeflow.v3.save_flow import candidates_from_records
+
+    p = Place(place_id="a", name="청화원", road_address="서울 종로구 대명길 36", lat=37.5, lng=127.0, provider="kakao_local")
+    g = candidates_from_records(_rec("청화원", "서울 동대문구 제기로 36", "혜화"), _found(p), "screenshot").groups[0]
+    assert g.status == "matched" and g.best.place.place_id == "a"
+
+
+def test_name_with_area_suffix_is_exact_and_other_area_is_not_default():
+    from placeflow.v3.save_flow import candidates_from_records
+
+    near = Place(place_id="a", name="뉴오더클럽 연남", road_address="서울 마포구 동교로34길 3", lat=37.5, lng=126.9, provider="kakao_local")
+    far = Place(place_id="b", name="뉴오더클럽 한남", road_address="서울 용산구 이태원로54길 58-14", lat=37.5, lng=127.0, provider="kakao_local")
+    g = candidates_from_records(_rec("뉴오더클럽", None, "연남"), _found(far, near), "screenshot").groups[0]
+    assert g.best.place.place_id == "a"
+
+
+def test_spaced_road_query_keeps_building_number():
+    from placeflow.v3.save_flow import candidates_from_records
+
+    queries = []
+
+    class S:
+        name = "fake"
+
+        def search(self, q, n=5):
+            queries.append(q)
+            return []
+
+    candidates_from_records(_rec("미엔아이", "서울 송파구 오금로 16길 5"), S(), "screenshot")
+    assert any("오금로16길 5" in q for q in queries)

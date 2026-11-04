@@ -48,10 +48,10 @@ flowchart TD
 - 캡쳐마다 다른 상호가 보임
 - OCR 오류로 텍스트가 없음
 
-LLM이 응답하면 그 결과로 바꿉니다. "장소 없음" 응답이면 `needs_user_input`입니다.
+LLM이 응답하면 그 결과로 바꿉니다. "장소 없음" 응답이면 `needs_user_input`입니다. 잘린 응답이나 형식 오류는 1번 다시 시도합니다. SDK 오류는 SDK의 재시도에 맡깁니다. LLM이 지역 단서를 주지 않으면 OCR이 읽은 글에서 가장 많이 나온 동네 이름을 씁니다.
 
 ## AI 내부 API의 후보 찾기
-AI 내부 API는 파이프라인의 ⑤를 쓰지 않습니다(`geo=none`). 추출한 장소를 `save_flow.candidates_from_records`가 카카오 로컬로 다시 검색해 장소별 묶음과 `EXACT`/`SIMILAR` 판정을 만듭니다. 판정 규칙은 [API_CONVENTION.md](API_CONVENTION.md)에 있습니다.
+AI 내부 API는 파이프라인의 ⑤를 쓰지 않습니다(`geo=none`). 추출한 장소를 `save_flow.candidates_from_records`가 카카오 로컬로 다시 검색해 장소별 묶음과 `EXACT`/`SIMILAR` 판정을 만듭니다. 판정 규칙은 [API_CONVENTION.md](API_CONVENTION.md)에 있습니다. 레코드의 지역 단서(`지역 단서:` 근거)를 검색어와 다른 지역 판정에 씁니다.
 
 ## 신뢰도 계산
 - 지도 확정 성공: `overall = 0.5 × 추출 확신도 + 0.5 × 지도 매칭 점수`

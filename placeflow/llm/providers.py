@@ -11,6 +11,9 @@ import os
 from .base import ImageInput
 
 
+MAX_OUTPUT_TOKENS = 4096  # 응답이 끝없이 길어지는 경우 (실측 약 140초 후 JSON 잘림) 를 빨리 끊음
+
+
 class OpenAIProvider:
     name = "openai"
     supports_vision = True
@@ -31,6 +34,7 @@ class OpenAIProvider:
             "response_format": {"type": "json_schema",
                                 "json_schema": {"name": "extraction_result", "schema": schema, "strict": False}},
             "temperature": 0,
+            "max_tokens": MAX_OUTPUT_TOKENS,
         }
         # 모델마다 지원 옵션이 달라서, 거절된 옵션을 빼며 최대 3번 시도합니다.
         #  - temperature 를 기본값만 허용하는 모델 → temperature 제거
@@ -43,7 +47,9 @@ class OpenAIProvider:
             except Exception as e:
                 msg = str(e).lower()
                 last_err = e
-                if "temperature" in msg and "temperature" in kwargs:
+                if "max_tokens" in msg and "max_tokens" in kwargs:  # 최신 모델은 max_completion_tokens 만 받음
+                    kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
+                elif "temperature" in msg and "temperature" in kwargs:
                     kwargs.pop("temperature")
                 elif ("response_format" in msg or "json_schema" in msg) and \
                         kwargs["response_format"]["type"] == "json_schema":
@@ -54,6 +60,8 @@ class OpenAIProvider:
                     raise
         else:
             raise last_err
+        if resp.choices[0].finish_reason == "length":
+            raise RuntimeError("응답이 너무 길어 잘렸습니다 (finish_reason=length)")
         msg = resp.choices[0].message
         if getattr(msg, "refusal", None):
             raise RuntimeError(f"모델이 응답을 거절했습니다: {msg.refusal}")
@@ -79,7 +87,7 @@ class AnthropicProvider:
         # 도구 호출을 강제해서 스키마에 맞는 JSON 을 받습니다.
         resp = self.client.messages.create(
             model=self.model,
-            max_tokens=4096,
+            max_tokens=MAX_OUTPUT_TOKENS,
             system=system,
             messages=[{"role": "user", "content": content}],
             tools=[{"name": "save_places", "description": "추출한 장소 정보를 저장", "input_schema": schema}],
@@ -114,6 +122,7 @@ class GeminiProvider:
                 response_mime_type="application/json",
                 response_json_schema=schema,
                 temperature=0,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
         )
         return json.loads(resp.text)

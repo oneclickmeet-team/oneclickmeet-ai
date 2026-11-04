@@ -1,0 +1,4 @@
+{"id":"ig-overlay-001","kind":"image","input":"images/example.jpg","segment":"인스타 사진 위 글씨","verified":false,"expected":[{"name":"가게 이름","address":"서울 종로구 대학로 1","aliases":["다른 표기"]}]}
+{"id":"ig-none-001","kind":"image","input":"images/no_place.jpg","segment":"장소 없음","verified":false,"expected":[]}
+{"id":"ig-caption-001","kind":"link","input":"https://www.instagram.com/p/EXAMPLE/","segment":"인스타 캡션 링크","verified":false,"expected":[{"name":"가게 이름","address":null}]}
+{"id":"text-001","kind":"text","input":"📍가게 이름 서울 종로구 대학로 1","note":null,"segment":"공유 문구","verified":false,"expected":[{"name":"가게 이름","address":"서울 종로구 대학로 1"}]}

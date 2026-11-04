@@ -5,6 +5,7 @@ import pytest
 
 from placeflow import Pipeline
 from placeflow.heuristic import HeuristicExtractor
+from placeflow.heuristic import HeuristicExtractor
 from placeflow.ocr import SidecarOCR
 from placeflow.cli import build_pipeline
 from placeflow.models import PlaceRecord, SourceType
@@ -544,3 +545,112 @@ def test_link_meta_only_by_default():
     assert fc.status == "ok" and fc.title == "연남 데이트 코스 후기" and "온담" in fc.description and fc.text == ""
     fc2 = fetch_link(route("https://blog.naver.com/u/123"), client, body=True)
     assert "딸기케이크" in fc2.text
+
+
+# ---------------------------------------------------------------- 실제 데이터 평가에서 나온 문제
+class _SeqLLM:
+    name, supports_vision, model = "seq", True, "v0"
+
+    def __init__(self, *results):
+        self.results, self.calls = list(results), 0
+
+    def extract(self, system, user_text, images, schema):
+        self.calls += 1
+        r = self.results.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+
+def test_truncated_llm_response_is_retried_once():
+    good = {"places": [{"name": "카페 온담", "confidence": 0.9}], "is_place_content": True}
+    llm = _SeqLLM(ValueError("Unterminated string"), good)
+    out = Pipeline(llm=llm).run("카페 온담 가자")
+    assert llm.calls == 2 and out.records[0].place.name == "카페 온담"
+
+
+def test_sdk_error_is_not_retried():
+    class ApiDown(Exception):
+        pass
+
+    llm = _SeqLLM(ApiDown("500"), ApiDown("500"))
+    Pipeline(llm=llm).run("카페 온담 가자")
+    assert llm.calls == 1
+
+
+def test_null_amenities_from_llm_is_tolerated():
+    llm = _SeqLLM({"places": [{"name": "카페 온담", "amenities": None, "tags": None, "confidence": 0.9}]})
+    out = Pipeline(llm=llm).run("카페 온담 가자")
+    assert out.records[0].extractor == "seq:v0"
+
+
+def _extract_names(text, source="text", title=""):
+    title_tag = f"<title>{title}</title>\n" if title else ""
+    user = f'<source type="{source}" />\n{title_tag}<content>\n{text}\n</content>'
+    return [p["name"] for p in HeuristicExtractor().extract("", user, [], {})["places"]]
+
+
+def test_ui_text_is_not_a_place():
+    assert "댓글 추가" not in " ".join(_extract_names("서울 종로구 대명1길 16-6\n댓글 추가."))
+    assert _extract_names("📍 댓글추천\n(1) 꿀돼지집✅ 급랭삼겹살 - 14,000원\n(2) 마시타야 ✅ 블랙라멘") == ["꿀돼지집", "마시타야"]
+
+
+def test_keycap_numbered_list():
+    text = "혜화 맛집\n1️⃣ 고베 규카츠\n2️⃣ 고봉당\n🔟 해피니스\n1️⃣1️⃣ 쪼리닭"
+    assert _extract_names(text) == ["고베 규카츠", "고봉당", "해피니스", "쪼리닭"]
+
+
+def test_pin_hashtag_wins_over_station_pin():
+    text = "낙곱새 맛집이다\n방이동📍#평화연남\n내용\n📍잠실역 10번출구\n서울 송파구 올림픽로32길 22-9 1층"
+    assert _extract_names(text) == ["평화연남"]
+
+
+def test_instagram_title_is_not_a_place():
+    title = "Instagram의 종로맛집님 : 혜화 맛집 고민끝"
+    assert _extract_names("혜화 맛집 고민끝! #혜화맛집 #대학로맛집 #대학로 #혜화", "instagram_link", title) == []
+
+
+def test_campaign_hashtags_are_not_places():
+    assert _extract_names("#혜화 #촌놈 #쎄럽_종로 #혜화맛집 #혜화고기집") == ["촌놈"]
+
+
+def test_retry_tells_llm_the_response_was_cut():
+    seen = []
+
+    class LLM:
+        name, supports_vision, model = "x", True, "v0"
+
+        def extract(self, system, user_text, images, schema):
+            seen.append(user_text)
+            if len(seen) == 1:
+                raise RuntimeError("잘림")
+            return {"places": []}
+
+    Pipeline(llm=LLM()).run("카페 온담 가자")
+    assert "잘렸습니다" not in seen[0] and "잘렸습니다" in seen[1]
+
+
+def test_find_region_prefers_most_mentioned():
+    from placeflow.heuristic import find_region
+
+    assert find_region("잠실 맛집 잠실 데이트 강남") == "잠실"
+    assert find_region("아무 지역 없음") is None
+
+
+def test_fallback_takes_region_from_ocr_caption(tmp_path):
+    class OCR:
+        name = "stub"
+
+        def read(self, path):
+            return "미자식당\n석촌호수 근처에 맛집이 그렇게 많다며"
+
+    class Vision:
+        name, supports_vision, model = "v", True, "0"
+
+        def extract(self, *a):
+            return {"places": [{"name": "미자식당", "confidence": 0.9}]}
+
+    f = tmp_path / "a.png"
+    f.write_bytes(b"\x89PNG fake")
+    out = Pipeline(ocr=OCR(), vision_fallback=Vision()).run(str(f))
+    assert "지역 단서: 석촌" in out.records[0].content.evidence
