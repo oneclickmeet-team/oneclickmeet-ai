@@ -20,6 +20,8 @@ class Settings:
     llm: str = "heuristic"                        # AI_LLM: heuristic | openai | anthropic | gemini
     llm_model: Optional[str] = None               # AI_LLM_MODEL (없으면 PLACEFLOW_LLM_MODEL)
     ocr: str = "auto"                             # AI_OCR: auto | tesseract | none
+    vision_fallback: str = "none"                 # AI_VISION_FALLBACK: none | openai | anthropic | gemini
+    vision_model: Optional[str] = None            # AI_VISION_FALLBACK_MODEL (없으면 AI_LLM_MODEL)
     ocr_concurrency: int = 2                      # AI_OCR_CONCURRENCY: 동시에 돌릴 스크린샷 인식 수
     max_image_mb: int = 5                         # AI_MAX_IMAGE_MB: 장당 최대 크기 (TRD 5MiB)
     cors_origins: tuple[str, ...] = field(default_factory=tuple)  # AI_CORS_ORIGINS: 쉼표 구분 (기본 끔)
@@ -36,6 +38,8 @@ class Settings:
                    llm=e("AI_LLM", "heuristic"),
                    llm_model=e("AI_LLM_MODEL") or e("PLACEFLOW_LLM_MODEL") or None,
                    ocr=e("AI_OCR", "auto"),
+                   vision_fallback=e("AI_VISION_FALLBACK", "none"),
+                   vision_model=e("AI_VISION_FALLBACK_MODEL") or e("AI_LLM_MODEL") or e("PLACEFLOW_LLM_MODEL") or None,
                    ocr_concurrency=max(1, int(e("AI_OCR_CONCURRENCY", "2"))),
                    max_image_mb=max(1, int(e("AI_MAX_IMAGE_MB", "5"))),
                    cors_origins=tuple(o.strip() for o in e("AI_CORS_ORIGINS", "").split(",") if o.strip()))
@@ -74,7 +78,8 @@ def get_pipeline():
 
             s = get_settings()
             try:
-                _pipe = build_pipeline(s.llm, s.llm_model, "none", s.ocr)
+                _pipe = build_pipeline(s.llm, s.llm_model, "none", s.ocr,
+                                       vision_fallback=s.vision_fallback, vision_model=s.vision_model)
             except (KeyError, ValueError, ImportError) as e:
                 raise DomainError("extractor_unavailable", f"추출기 설정 오류: {e}")
         return _pipe

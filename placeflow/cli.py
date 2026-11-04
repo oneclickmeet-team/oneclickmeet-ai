@@ -25,12 +25,15 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def build_pipeline(llm="heuristic", model=None, geo="none", ocr="none", fixtures=None, geo_fixture=None,
-                   link_body: bool = False) -> Pipeline:
-    """link_body: 링크 본문까지 읽기 (TRD 상 기본 False — 평가·예전 화면 전용)."""
+                   link_body: bool = False, vision_fallback=None, vision_model=None) -> Pipeline:
+    """link_body: 링크 본문까지 읽기 (TRD 상 기본 False — 평가·예전 화면 전용).
+    vision_fallback: OCR 로 추출하지 못한 캡쳐만 다시 읽을 비전 LLM 제공자 (기본 끔)."""
+    use_fallback = vision_fallback and vision_fallback.lower() != "none"
     return Pipeline(
         llm=get_provider(llm, model),
         geo=get_resolver(geo, geo_fixture),
         ocr=get_ocr(ocr),
+        vision_fallback=get_provider(vision_fallback, vision_model) if use_fallback else None,
         http=FixtureClient(fixtures) if fixtures else UrllibClient(),
         link_body=link_body,
     )
@@ -57,6 +60,8 @@ def main(argv=None):
     ex.add_argument("--model")
     ex.add_argument("--geo", default="none")
     ex.add_argument("--ocr", default="none")
+    ex.add_argument("--vision-fallback", help="OCR 로 추출하지 못한 캡쳐를 다시 읽을 비전 LLM 제공자")
+    ex.add_argument("--vision-model")
     ex.add_argument("--fixtures", help="오프라인 HTTP 픽스처 폴더")
     ex.add_argument("--geo-fixture")
     ex.add_argument("--store", help="결과를 upsert 할 JSONL 경로")
@@ -92,7 +97,8 @@ def main(argv=None):
         return 0
 
     try:
-        pipe = build_pipeline(a.llm, a.model, a.geo, a.ocr, a.fixtures, a.geo_fixture)
+        pipe = build_pipeline(a.llm, a.model, a.geo, a.ocr, a.fixtures, a.geo_fixture,
+                              vision_fallback=a.vision_fallback, vision_model=a.vision_model)
     except KeyError as e:
         print(f"설정 오류: 환경변수 {e} 가 필요합니다 (.env.example 참고)", file=sys.stderr)
         return 2

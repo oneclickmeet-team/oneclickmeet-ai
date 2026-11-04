@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 
 from placeflow import Pipeline
+from placeflow.heuristic import HeuristicExtractor
+from placeflow.ocr import SidecarOCR
 from placeflow.cli import build_pipeline
 from placeflow.models import PlaceRecord, SourceType
 from placeflow.router import route
@@ -127,6 +129,95 @@ def test_vision_llm_receives_image():
     llm = FakeLLM({"places": [], "is_place_content": False})
     out = Pipeline(llm=llm).run(str(FIX / "images" / "i5_selfie.png"))
     assert llm.calls[0][2] == 1 and out.status.value == "needs_user_input"
+
+
+# ---------------------------------------------------------------- OCR 실패 시 비전 LLM
+VISION_PLACE = {"places": [{"name": "파스타마켓", "address_hint": "종로구 대학로11길 9-5", "confidence": 0.9}],
+                "is_place_content": True}
+
+
+class StubOCR:
+    name = "stub"
+
+    def __init__(self, texts=None, error=None):
+        self.texts, self.error = texts or {}, error
+
+    def read(self, path):
+        if self.error:
+            raise self.error
+        return self.texts.get(Path(path).name, "")
+
+
+def _capture(tmp_path, name="cap.png"):
+    f = tmp_path / name
+    f.write_bytes(b"\x89PNG fake")
+    return str(f)
+
+
+def test_ocr_success_does_not_call_vision():
+    vision = FakeLLM(VISION_PLACE)
+    out = Pipeline(ocr=SidecarOCR(), vision_fallback=vision).run(str(FIX / "images" / "i2_naver_place.png"))
+    assert out.records and out.records[0].extractor == "heuristic"
+    assert vision.calls == []
+
+
+def test_ocr_without_place_retries_with_vision(tmp_path):
+    vision = FakeLLM(VISION_PLACE)
+    out = Pipeline(ocr=StubOCR({"cap.png": "@종로구 대학로11길 9-5"}), vision_fallback=vision).run(_capture(tmp_path))
+    assert out.records[0].place.name == "파스타마켓"
+    assert out.records[0].extractor == "fake:v0"
+    assert vision.calls[0][2] == 1
+    assert any(t["step"] == "vision_fallback" for t in out.trace)
+
+
+def test_low_confidence_ocr_retries_with_vision(tmp_path):
+    class LowConfidence(HeuristicExtractor):
+        def extract(self, system, user_text, images, schema):
+            return {"places": [{"name": "깨진이름", "confidence": 0.25}], "is_place_content": True}
+
+    vision = FakeLLM(VISION_PLACE)
+    out = Pipeline(llm=LowConfidence(), ocr=StubOCR(), vision_fallback=vision).run(_capture(tmp_path))
+    assert [r.place.name for r in out.records] == ["파스타마켓"]
+
+
+def test_ocr_error_retries_with_vision(tmp_path):
+    vision = FakeLLM(VISION_PLACE)
+    out = Pipeline(ocr=StubOCR(error=RuntimeError("tesseract 오류")), vision_fallback=vision).run(_capture(tmp_path))
+    assert out.records[0].place.name == "파스타마켓"
+    assert any(t["step"] == "ocr_error" for t in out.trace)
+
+
+def test_no_ocr_uses_vision_fallback(tmp_path):
+    out = Pipeline(vision_fallback=FakeLLM(VISION_PLACE)).run(_capture(tmp_path))
+    assert out.records[0].place.name == "파스타마켓"
+
+
+def test_vision_failure_keeps_ocr_result(tmp_path):
+    class LowConfidence(HeuristicExtractor):
+        def extract(self, system, user_text, images, schema):
+            return {"places": [{"name": "온담", "confidence": 0.3}], "is_place_content": True}
+
+    vision = FakeLLM(error=RuntimeError("rate limit"))
+    out = Pipeline(llm=LowConfidence(), ocr=StubOCR(), vision_fallback=vision).run(_capture(tmp_path))
+    assert out.records[0].place.name == "온담"
+    assert any(t["step"] == "extract_error" for t in out.trace)
+
+
+def test_vision_failure_without_ocr_result_reports_failure(tmp_path):
+    out = Pipeline(ocr=StubOCR(), vision_fallback=FakeLLM(error=RuntimeError("rate limit"))).run(_capture(tmp_path))
+    assert out.status.value == "failed" and "rate limit" in out.message
+
+
+def test_vision_finding_nothing_asks_user(tmp_path):
+    vision = FakeLLM({"places": [], "is_place_content": False})
+    out = Pipeline(ocr=StubOCR(), vision_fallback=vision).run(_capture(tmp_path))
+    assert out.status.value == "needs_user_input" and vision.calls
+
+
+def test_link_does_not_use_vision_fallback():
+    vision = FakeLLM(VISION_PLACE)
+    out = Pipeline(vision_fallback=vision).run("오늘 날씨 좋다")
+    assert vision.calls == [] and out.status.value == "needs_user_input"
 
 
 # ---------------------------------------------------------------- store

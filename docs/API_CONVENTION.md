@@ -322,6 +322,7 @@ httpx.post(f"{AI}/internal/v1/place-image-recognitions", headers={"X-AI-Key": KE
 | `AI_SERVICE_KEY` | 설정하면 `X-AI-Key` 필수 | 끔 |
 | `AI_LLM` · `AI_LLM_MODEL` | 추출기 `heuristic` · `openai` · `anthropic` · `gemini` | heuristic |
 | `AI_OCR` · `AI_OCR_CONCURRENCY` · `TESSDATA_PREFIX` | OCR 설정 | auto · 2 |
+| `AI_VISION_FALLBACK` · `AI_VISION_FALLBACK_MODEL` | OCR + 규칙 기반으로 추출하지 못한 캡쳐만 다시 읽을 비전 LLM (`openai` · `anthropic` · `gemini`) | none |
 | `AI_MAX_IMAGE_MB` | 이미지 장당 최대 크기 | 5 |
 | `AI_CORS_ORIGINS` | 허용 출처(쉼표 구분). 백엔드끼리만 호출하므로 기본은 끔 | — |
 

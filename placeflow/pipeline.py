@@ -29,6 +29,7 @@ class PipelineConfig:
     geo_accept: float = 0.75          # 지도 후보를 같은 장소로 인정하는 최소 점수
     complete_threshold: float = 0.7   # 이 이상이면 status=complete
     fallback_to_heuristic: bool = True
+    ocr_accept: float = 0.5           # OCR + 규칙 기반 추출의 최소 확신도. 미만이면 비전 LLM 으로 다시 읽음
 
 
 @dataclass
@@ -36,6 +37,7 @@ class Pipeline:
     llm: object = field(default_factory=HeuristicExtractor)
     geo: object | None = None
     ocr: object | None = None
+    vision_fallback: object | None = None  # OCR 로 추출하지 못한 캡쳐만 다시 읽는 비전 LLM
     http: HttpClient = field(default_factory=UrllibClient)
     config: PipelineConfig = field(default_factory=PipelineConfig)
     link_body: bool = False  # TRD: 링크는 메타 정보만. True 는 평가·예전 화면(/legacy) 전용
@@ -94,7 +96,9 @@ class Pipeline:
                         t = self.ocr.read(str(path))
                     except Exception as e:
                         step("ocr_error", engine=self.ocr.name, file=path.name, error=str(e)[:200])
-                        return PipelineOutput(status=Status.failed, trace=trace, message=f"OCR 실패: {e}")
+                        if self.vision_fallback is None:
+                            return PipelineOutput(status=Status.failed, trace=trace, message=f"OCR 실패: {e}")
+                        t = ""
                     texts.append(t.strip())
                     step("ocr", engine=self.ocr.name, file=path.name, chars=len(t))
                 body = "\n\n".join(texts)
@@ -104,7 +108,7 @@ class Pipeline:
                 if len(names) > 1:
                     r.ids["capture_names"] = sorted(names)
                     step("capture_mismatch", names=sorted(names))
-            else:
+            elif self.vision_fallback is None:
                 return PipelineOutput(status=Status.failed, trace=trace,
                                       message="이미지를 읽으려면 비전 LLM 또는 OCR(tesseract) 설정이 필요합니다.")
         else:
@@ -114,6 +118,15 @@ class Pipeline:
         # ③ 추출
         user = prompts.build_user(source.type.value, source.url, title, body, extra_text, bool(images))
         result, extractor = self._extract(user, images, step)
+        if r.kind == "image" and not images and self.vision_fallback is not None and self._needs_vision(result, r.ids):
+            step("vision_fallback", reason="ocr_insufficient", count=len(paths))
+            user = prompts.build_user(source.type.value, source.url, "", "", extra_text, True)
+            retried, ident = self._extract(user, [ImageInput.from_path(p) for p in paths], step, self.vision_fallback)
+            if retried is not None:  # 호출이 실패하면 OCR 결과를 그대로 둠
+                result, extractor, body = retried, ident, ""
+                r.ids.pop("capture_names", None)
+            elif result is not None and not result.places:  # 호출 실패를 '장소 없음'으로 안내하지 않음
+                result, extractor = None, ident
         if result is None:
             err = next((t.get("error") for t in reversed(trace) if t["step"] == "extract_error"), "알 수 없는 오류")
             return PipelineOutput(status=Status.failed, trace=trace,
@@ -130,8 +143,14 @@ class Pipeline:
         return PipelineOutput(status=overall, records=records, trace=trace)
 
     # ------------------------------------------------------------------ internals
-    def _extract(self, user: str, images, step) -> tuple[ExtractionResult | None, str]:
-        provider = self.llm
+    def _needs_vision(self, result: ExtractionResult | None, ids: dict) -> bool:
+        """OCR + 규칙 기반 결과를 믿기 어려운 경우: 장소 없음, 낮은 확신도, 캡쳐마다 다른 상호."""
+        if result is None or not result.places or ids.get("capture_names"):
+            return True
+        return any(p.confidence < self.config.ocr_accept for p in result.places)
+
+    def _extract(self, user: str, images, step, provider=None) -> tuple[ExtractionResult | None, str]:
+        provider = provider or self.llm
         ident = f"{provider.name}:{getattr(provider, 'model', '')}".rstrip(":")
         try:
             data = provider.extract(self._system, user, images, self._schema)
