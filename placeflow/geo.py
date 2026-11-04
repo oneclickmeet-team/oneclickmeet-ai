@@ -1,6 +1,6 @@
 """장소 확정(보강): 추출한 이름/주소 단서로 지도 API를 검색해 정식 정보와 좌표를 붙입니다.
 
-제공자: none | fixture(오프라인) | naver | kakao
+제공자: none | fixture(오프라인) | kakao
 """
 from __future__ import annotations
 
@@ -39,44 +39,10 @@ class GeoResolver(Protocol):
     def search(self, query: str) -> list[GeoCandidate]: ...
 
 
-def _strip_tags(s: str) -> str:
-    return re.sub(r"<[^>]+>", "", s or "")
-
-
 def _http_json(url: str, headers: dict) -> dict:
     req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=8) as r:
         return json.loads(r.read().decode("utf-8"))
-
-
-class NaverLocalResolver:
-    """네이버 검색 API - 지역 (display 최대 5). NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 필요."""
-
-    name = "naver"
-    ENDPOINT = "https://openapi.naver.com/v1/search/local.json"
-
-    def __init__(self):
-        self.cid = os.environ["NAVER_CLIENT_ID"]
-        self.secret = os.environ["NAVER_CLIENT_SECRET"]
-
-    @staticmethod
-    def _coord(v) -> float | None:
-        if v in (None, ""):
-            return None
-        f = float(v)
-        return f / 1e7 if abs(f) > 1000 else f  # 정수 스케일(×1e7) 응답 대응
-
-    def search(self, query: str) -> list[GeoCandidate]:
-        url = f"{self.ENDPOINT}?query={urllib.parse.quote(query)}&display=5&sort=random"
-        data = _http_json(url, {"X-Naver-Client-Id": self.cid, "X-Naver-Client-Secret": self.secret})
-        out = []
-        for it in data.get("items", []):
-            out.append(GeoCandidate(
-                "naver", None, _strip_tags(it.get("title")), it.get("category"),
-                it.get("roadAddress") or None, it.get("address") or None,
-                self._coord(it.get("mapy")), self._coord(it.get("mapx")),
-                it.get("telephone") or None, it.get("link") or None, raw=it))
-        return out
 
 
 class KakaoLocalResolver:
@@ -124,8 +90,6 @@ def get_resolver(name: str, fixture_path: str | None = None):
     name = (name or "none").lower()
     if name == "none":
         return None
-    if name == "naver":
-        return NaverLocalResolver()
     if name == "kakao":
         return KakaoLocalResolver()
     if name == "fixture":

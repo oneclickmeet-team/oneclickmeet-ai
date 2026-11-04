@@ -65,7 +65,7 @@ class Place(BaseModel):
     lng: float
     phone: Optional[str] = None
     map_url: Optional[str] = None
-    provider: str = Field("naver_local", description="kakao_local | naver_local | demo | link")
+    provider: str = Field("kakao_local", description="kakao_local | demo | link | backend")
     opening_hours: Optional[WeeklyHours] = None
     tags: list[dict] = Field(default_factory=list,
                              description="블로그 태그 [{label, mention_count}] (링크·스크린샷으로 찾을 때 붙음, 저장 시 함께 보관)")

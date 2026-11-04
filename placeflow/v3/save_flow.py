@@ -95,10 +95,25 @@ def _place_from_record(r: PlaceRecord) -> Optional[Place]:
 
 
 _ROAD_CORE = re.compile(r"([가-힣0-9]+(?:로|길)\s*\d+(?:-\d+)?)")
+# 캡션의 동네 이름 → 구. 주소가 없을 때 같은 이름의 먼 가게를 기본 선택하지 않으려고 씀
+_AREA_GUS = {
+    "혜화": ("종로구", "성북구"), "대학로": ("종로구",), "서촌": ("종로구",), "북촌": ("종로구",), "삼청": ("종로구",),
+    "익선": ("종로구",), "종로": ("종로구",), "잠실": ("송파구",), "송리단길": ("송파구",), "석촌": ("송파구",),
+    "방이": ("송파구",), "송파": ("송파구",), "연남": ("마포구", "서대문구"), "홍대": ("마포구",), "합정": ("마포구",),
+    "망원": ("마포구",), "상수": ("마포구",), "신촌": ("서대문구", "마포구"), "성신여대": ("성북구",),
+    "한성대": ("성북구", "종로구"), "성수": ("성동구",), "건대": ("광진구",), "강남": ("강남구", "서초구"),
+    "압구정": ("강남구",), "청담": ("강남구",), "신사": ("강남구",), "이태원": ("용산구",), "한남": ("용산구",),
+    "해방촌": ("용산구",), "용산": ("용산구",), "을지로": ("중구",), "문래": ("영등포구",), "여의도": ("영등포구",),
+}
+
+
+def _join_road(addr: Optional[str]) -> str:
+    """'와우산로 21길 28-6' 처럼 띄어 쓴 도로명을 붙임."""
+    return re.sub(r"(로)\s+(\d+(?:번)?길)", r"\1\2", addr or "")
 
 
 def _road_core(addr: Optional[str]) -> Optional[str]:
-    m = _ROAD_CORE.search(addr or "")
+    m = _ROAD_CORE.search(_join_road(addr))
     return re.sub(r"\s+", "", m.group(1)) if m else None
 
 
@@ -137,6 +152,18 @@ def _sigungu(addr: Optional[str]) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def _area_gus(hint: Optional[str]) -> tuple[str, ...]:
+    if not hint:
+        return ()
+    if hint.endswith("구"):
+        return (hint,)
+    return next((gus for area, gus in _AREA_GUS.items() if area in hint), ())
+
+
+def _region_hint(r: PlaceRecord) -> str:
+    return next((e.split(":", 1)[1].strip() for e in r.content.evidence if e.startswith("지역 단서:")), "")
+
+
 def _block_of(raw: str, name: str, next_name: Optional[str]) -> str:
     """캡션 전체에서 이 장소 설명 부분만 (다음 장소 이름 전까지)."""
     i = raw.find(name)
@@ -157,7 +184,8 @@ def match(name: str, branch: Optional[str], road: Optional[str], buildings: list
     full = _norm(f"{name}{branch or ''}")
     if not n or not c:
         return None
-    if c in (n, full) or (c.startswith(n) and _BRANCH_TAIL.match(p.name.replace(" ", "")[len(name.replace(" ", "")):] or "")) \
+    tail = p.name.replace(" ", "")[len(name.replace(" ", "")):]
+    if c in (n, full) or (c.startswith(n) and (_BRANCH_TAIL.match(tail or "") or tail in _AREA_GUS)) \
             or (branch and c.startswith(n) and _norm(branch) in c):
         name_kind = "same"
     elif n in c or c in n:
@@ -173,6 +201,10 @@ def match(name: str, branch: Optional[str], road: Optional[str], buildings: list
     bld = next((b for b in buildings if b[0] in paddr and (b[1] in paddr or b[1] == "상가" and "상가" in paddr)), None)
 
     reasons: list[str] = []
+    if addr_same and name_kind == "far" and not name_unsure:  # 주소는 맞는데 이름이 다름: 오독이거나 같은 건물의 다른 가게
+        if difflib.SequenceMatcher(None, n, c).ratio() >= 0.5:  # 가우뚱 → 가우동
+            return "exact", 0.85, ["주소 일치", "이름이 비슷해요"]
+        return "similar", 0.5, ["주소만 일치"]
     if addr_same and (name_kind != "far" or name_unsure):
         reasons.append("주소 일치")
         if name_kind == "same":
@@ -195,13 +227,13 @@ def match(name: str, branch: Optional[str], road: Optional[str], buildings: list
 def _queries(r: PlaceRecord, road: Optional[str], buildings: list[str], name_unsure: bool) -> list[str]:
     a = r.place.address
     # 해시태그에서 찾은 이름은 주소가 없으므로 캡션의 지역 단서(#잠실맛집 → 잠실)로 검색 범위를 좁힘
-    hint = next((e.split(":", 1)[1].strip() for e in r.content.evidence if e.startswith("지역 단서:")), "")
+    hint = _region_hint(r)
     area = a.dong or a.sigungu or _sigungu(a.road) or hint
     full = f"{r.place.name} {r.place.branch or ''}".strip()
     name_q = [f"{area} {full}", full]
     road_q = []
-    if road:  # 주소로도 찾기: '종로구 동숭길 68' (상호명이 깨진 캡쳐도 주소는 대개 정확)
-        tail = _ROAD_CORE.search(a.road).group(1)
+    if road and _road_core(a.road):  # 주소로도 찾기: '종로구 동숭길 68' (상호명이 깨진 캡쳐도 주소는 대개 정확)
+        tail = _ROAD_CORE.search(_join_road(a.road)).group(1)
         road_q = [f"{a.sigungu or _sigungu(a.road) or ''} {tail}".strip(), f"{tail} {r.place.name}"]
     bld_q = [f"{b[0]}{b[1]} {r.place.name}" for b in buildings[:1]]
     qs = (road_q + name_q) if name_unsure else (name_q + road_q + bld_q)
@@ -238,6 +270,10 @@ def candidates_from_records(records: list[PlaceRecord], search: SearchProvider, 
                        category=r.classification.primary_label)
         name_unsure = any(e.startswith("상호명 인식 불확실") for e in r.content.evidence)
         road = _road_core(a.road)
+        expected_gus = _area_gus(_region_hint(r)) or ((home_gu,) if home_gu and len(gus) >= 2 else ())
+        road_gu = _sigungu(a.road)
+        if road and road_gu and expected_gus and road_gu not in expected_gus and not r.extractor.startswith("heuristic"):
+            road = None  # 게시물 지역과 다른 구의 주소는 LLM 이 잘못 읽은 것으로 보고 이름 + 지역으로 찾음
         block = _block_of(raw, r.place.name, recs[i + 1].place.name if i + 1 < len(recs) else None)
         buildings = [m for m in _BUILDING.findall(block) if len(m[0]) >= 2][:2]
         pool: dict[str, Candidate] = {}
@@ -253,6 +289,10 @@ def candidates_from_records(records: list[PlaceRecord], search: SearchProvider, 
                 if not m:
                     continue
                 mtype, score, reasons = m
+                cand_addr = p.road_address or p.jibun_address or ""
+                if mtype == "exact" and not road and expected_gus and cand_addr \
+                        and not any(gu in cand_addr for gu in expected_gus):
+                    mtype, score, reasons = "similar", min(score, 0.6), reasons + ["다른 지역"]
                 if home_gu and _sigungu(p.road_address) == home_gu and not road:
                     score, reasons = min(1.0, score + 0.03), reasons + ["같은 동네"]
                 old = pool.get(p.place_id)

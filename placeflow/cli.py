@@ -1,7 +1,7 @@
 """명령줄 실행.
 
   python -m placeflow extract <링크|이미지경로|텍스트> [--note 캡션] [--llm heuristic|openai|anthropic|gemini]
-                              [--model 이름] [--geo none|fixture|naver|kakao] [--ocr none|sidecar|tesseract]
+                              [--model 이름] [--geo none|fixture|kakao] [--ocr none|sidecar|tesseract]
                               [--fixtures eval/fixtures/pages] [--store data/places.jsonl]
   python -m placeflow export-schema
 """

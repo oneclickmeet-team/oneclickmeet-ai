@@ -16,12 +16,16 @@ from . import geo as geo_mod
 from . import enrich, normalize, prompts, taxonomy
 from .fetchers import FetchedContent, fetch_link
 from .fetchers.http import HttpClient, UrllibClient
-from .heuristic import HeuristicExtractor
+from .heuristic import HeuristicExtractor, find_region
 from .llm import ImageInput, inline_refs
 from .models import (Address, Classification, Confidence, Content, Details, ExternalIds, ExtractedPlace,
                      ExtractionResult, FieldSource, GeoPoint, PipelineOutput, PlaceInfo, PlaceRecord, SourceInfo, SourceType,
                      Status)
 from .router import route
+
+
+LLM_ATTEMPTS = 2
+RETRY_NOTE = "\n\n이전 응답이 잘렸습니다. 없는 값은 null 로 두고, 각 필드를 짧게 쓰고, 같은 내용을 반복하지 마세요."
 
 
 @dataclass
@@ -123,6 +127,9 @@ class Pipeline:
             user = prompts.build_user(source.type.value, source.url, "", "", extra_text, True)
             retried, ident = self._extract(user, [ImageInput.from_path(p) for p in paths], step, self.vision_fallback)
             if retried is not None:  # 호출이 실패하면 OCR 결과를 그대로 둠
+                region = find_region(body)  # LLM 이 놓친 지역 단서는 OCR 이 읽은 게시물 설명에서
+                for place in retried.places:
+                    place.region_hint = place.region_hint or region
                 result, extractor, body = retried, ident, ""
                 r.ids.pop("capture_names", None)
             elif result is not None and not result.places:  # 호출 실패를 '장소 없음'으로 안내하지 않음
@@ -152,15 +159,17 @@ class Pipeline:
     def _extract(self, user: str, images, step, provider=None) -> tuple[ExtractionResult | None, str]:
         provider = provider or self.llm
         ident = f"{provider.name}:{getattr(provider, 'model', '')}".rstrip(":")
-        try:
-            data = provider.extract(self._system, user, images, self._schema)
-            res = ExtractionResult.model_validate(_sanitize(data))
-            step("extract", provider=ident, places=len(res.places))
-            return res, ident
-        except (ValidationError, ValueError, KeyError, TypeError, RuntimeError, OSError) as e:
-            step("extract_error", provider=ident, error=f"{type(e).__name__}: {str(e)[:400]}")
-        except Exception as e:  # SDK 별 예외
-            step("extract_error", provider=ident, error=f"{type(e).__name__}: {str(e)[:400]}")
+        for attempt in range(LLM_ATTEMPTS):
+            try:
+                data = provider.extract(self._system, user + (RETRY_NOTE if attempt else ""), images, self._schema)
+                res = ExtractionResult.model_validate(_sanitize(data))
+                step("extract", provider=ident, places=len(res.places))
+                return res, ident
+            except (ValidationError, ValueError, KeyError, TypeError, RuntimeError) as e:  # 잘린 JSON 등: 다시 시도
+                step("extract_error", provider=ident, attempt=attempt + 1, error=f"{type(e).__name__}: {str(e)[:400]}")
+            except Exception as e:  # SDK 별 예외 (재시도는 SDK 가 이미 함)
+                step("extract_error", provider=ident, attempt=attempt + 1, error=f"{type(e).__name__}: {str(e)[:400]}")
+                break
         if self.config.fallback_to_heuristic and not isinstance(provider, HeuristicExtractor) and not images:
             data = HeuristicExtractor().extract(self._system, user, [], self._schema)
             res = ExtractionResult.model_validate(_sanitize(data))
@@ -171,6 +180,8 @@ class Pipeline:
     def _to_record(self, p: ExtractedPlace, source: SourceInfo, ids: dict, extractor: str,
                    raw_excerpt: str | None, step) -> PlaceRecord:
         reasons: list[str] = []
+        if p.region_hint and not any(e.startswith("지역 단서:") for e in p.evidence):
+            p.evidence = [f"지역 단서: {p.region_hint}", *p.evidence]  # 후보 찾기에서 검색 범위·다른 지역 판정에 씀
         primary, sub = p.primary_category, p.sub_category
         if not taxonomy.is_valid(primary, sub):
             sub = None
@@ -282,9 +293,11 @@ def _sanitize(data: dict) -> dict:
     data["places"] = places = [p for p in places if isinstance(p, dict) and isinstance(p.get("name"), str)
                                and p["name"].strip()]
     for p in places:
-        for key in ("tags", "free_tags", "highlights", "cautions", "evidence"):
+        for key in ("tags", "free_tags", "highlights", "cautions", "evidence", "amenities"):
             v = p.get(key)
-            if v is not None and not isinstance(v, list):
+            if v is None:
+                p.pop(key, None)
+            elif not isinstance(v, list):
                 p[key] = [v] if isinstance(v, str) else []
             elif isinstance(v, list):
                 p[key] = [x for x in v if isinstance(x, str)]

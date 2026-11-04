@@ -1,6 +1,7 @@
-# T1. 데이터 수집 방법 조사 (researcher)
+# 데이터 수집 방법 조사
 
-> 조사일: 2026-10-07. 사실(출처 있음)과 추론(⚠️ 표시)을 구분했습니다.
+> 최초 조사 2026-10-07, 인스타그램 부분 갱신 2026-11-04. 사실(출처 있음)과 추론(⚠️ 표시)을 구분했습니다.
+> 1·2장은 조사 당시 기록입니다. 현재 설계는 3장과 [04_data_sources.md](04_data_sources.md)를 따릅니다.
 
 ## 1. 입력 출처별 수집 가능성
 
@@ -17,7 +18,7 @@
 
 ## 2. 장소 확정(보강)용 API
 
-### 네이버 지역 검색 API
+### 네이버 지역 검색 API (조사 기록, 현재 사용 안 함)
 - 파라미터: `query`(필수), `display` 1~5(기본 1), `start`, `sort`=`random`(정확도)·`comment`(리뷰 수)
 - 응답: `title`, `link`, `category`, `description`, `telephone`, `address`(지번), `roadAddress`, `mapx`, `mapy`
 - 좌표: WGS84, `mapx`=경도, `mapy`=위도 (현재 문서 기준. ⚠️ 구 버전 응답은 정수 스케일(×10⁷) 형태도 있어 코드에서 둘 다 처리)
@@ -32,9 +33,22 @@
 - 무료 쿼터는 개발자 계정당 처음 활성화한 앱에만 제공, 초과분은 유료
 - 출처: [Kakao Local 공통](https://developers.kakao.com/docs/en/local/common), [Kakao Map REST API](https://developers.kakao.com/docs/en/kakaomap/rest-api)
 
-## 3. 설계 결론 (builder에게 넘기는 결정사항)
-1. **인스타그램 = 캡쳐/캡션 우선**, 링크는 OG 메타 시도 후 실패하면 `needs_user_input`으로 사용자에게 캡쳐를 요청.
-2. **네이버 블로그 = 모바일 URL로 바꿔서 본문 수집**.
-3. **네이버 플레이스 = place ID와 상호명만 취득 → 지역검색 API로 보강**.
-4. 장소 확정은 **네이버·카카오 둘 다 어댑터로 제공**하고 설정에서 고름 (카카오는 결과가 많고 카테고리 코드가 깔끔, 네이버는 블로그·플레이스와 이름 표기가 일치).
-5. LLM이 만든 주소는 **지도 API 결과와 일치할 때만 확정**, 아니면 신뢰도를 낮추고 사용자 확인 필요로 표시.
+## 3. 현재 설계 결론
+1. **인스타그램 = 캡쳐/캡션 우선**. 링크는 메타 정보를 시도하고, 실패하면 캡쳐를 요청합니다.
+2. **네이버 블로그 = 메타 정보만**. 처음에는 본문을 수집했지만 TRD에 따라 바꿨습니다. 본문 읽기는 평가·`/legacy` 전용 옵션입니다.
+3. **네이버 플레이스 = place ID와 메타 정보** → 후보 검색으로 보강합니다.
+4. **장소 검색 = 카카오 로컬 고정** (v2.1). 네이버 지역검색은 쓰지 않고, 네이버 API는 블로그 태그에만 씁니다.
+5. **캡쳐 = OCR 우선, 실패 시 비전 LLM**. 처음 결론(비전 LLM 우선)에서 비용을 고려해 바꿨습니다.
+6. LLM이 만든 주소는 **지도 API 결과와 일치할 때만 확정**하고, 아니면 신뢰도를 낮추고 사용자 확인 필요로 표시합니다.
+
+## 4. 인스타그램 공식 API 확인 (2026-11-04)
+결론: **공유받은 임의 게시물의 사진을 읽는 용도로 쓸 수 있는 공식 API는 확인하지 못했습니다.**
+
+| API | 확인 내용 | 판단 |
+|---|---|---|
+| [Instagram Platform](https://developers.facebook.com/docs/instagram-platform/overview/) | 프로페셔널 계정(비즈니스·크리에이터) 데이터 접근용 | 임의 게시물 조회에 부적합 |
+| [Business Discovery](https://developers.facebook.com/docs/instagram-api/business-discovery) | 다른 비즈니스·크리에이터 계정의 공개 데이터를 **계정 이름으로** 조회. Facebook Login과 권한 필요. 얻은 미디어 ID로 직접 조회는 권한 오류 | 개인 계정 불가로 보임. 여러 장 게시물의 사진 조회 가능 여부는 실제 호출로 확인 필요 |
+| [oEmbed](https://developers.facebook.com/blog/post/2025/04/08/oembed-updates/) | `thumbnail_url` 등 제거 | 사진을 얻는 용도로 사용 불가 |
+| Basic Display | [2024-12 종료](https://www.getphyllo.com/post/instagram-api-guide) (제3자 자료) | 사용 불가 |
+
+인스타그램 [고객센터](https://help.instagram.com/740480200552298)와 `robots.txt`는 허가 없는 자동 수집을 금지합니다. 앱 심사 요건은 이번에 확인하지 못했습니다.
