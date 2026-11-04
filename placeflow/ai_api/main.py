@@ -13,12 +13,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..v3.domain import DomainError
 from ..v3.search import ExternalSearchError
-from .deps import get_search, get_settings, require_key
+from .deps import get_search, get_settings, get_tagger, require_key
 from .errors import DOMAIN_MAP, ApiProblem, log, problem_response, provider_unavailable
 from .routers import places, recommend
 from .schemas import Health, Problem
 
-WORKFLOW_VERSION = "2.0"
+WORKFLOW_VERSION = "2.1"
 PREFIX = "/internal/v1"
 ERROR_RESPONSES = {code: {"model": Problem, "content": {"application/problem+json": {}}}
                    for code in (400, 401, 404, 413, 415, 503)}
@@ -33,7 +33,7 @@ def create_app() -> FastAPI:
         title="OneClickMeet AI Internal API",
         version=WORKFLOW_VERSION,
         description="Spring Boot → FastAPI 내부 API. 장소 후보 검색(P02)·링크/텍스트 인식(P03)·스크린샷 인식(P04)·"
-                    "코스 추천(R01)·지원 지역(P01). 상태 없음 — 저장 장소는 요청에 담아 보낸다. "
+                    "코스 추천(R01)·지원 지역(P01). 장소 검색은 카카오 로컬, 장소 태그는 네이버 블로그 검색(제목·요약). 상태 없음 — 저장 장소는 요청에 담아 보낸다. "
                     "JSON camelCase, 오류는 application/problem+json.",
     )
     if settings.cors_origins:
@@ -44,7 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(recommend.router, prefix=PREFIX, dependencies=auth, responses=ERROR_RESPONSES)
 
     @app.get("/health", response_model=Health, tags=["상태"])
-    def health():
+    def health(tagger=Depends(get_tagger)):
         from ..ocr import tesseract_status
 
         s = get_settings()
@@ -53,7 +53,8 @@ def create_app() -> FastAPI:
         except ValueError as e:  # 키 없음 등 설정 오류
             search_name = f"error: {e}"
         return Health(workflow_version=WORKFLOW_VERSION, search_provider=search_name, extractor=s.llm, ocr=s.ocr,
-                      ocr_ready=tesseract_status()[0], auth_required=bool(s.api_key))
+                      ocr_ready=tesseract_status()[0], auth_required=bool(s.api_key),
+                      tag_provider=tagger.name if tagger else None)
 
     @app.exception_handler(ApiProblem)
     def _problem(request: Request, e: ApiProblem):

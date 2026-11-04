@@ -54,6 +54,8 @@ class JsonRepo:
                 for k, v in place.model_dump().items():
                     if getattr(merged, k) in (None, "", "기타") and v not in (None, ""):
                         setattr(merged, k, v)
+                if place.tag_post_count is not None:  # 블로그 태그는 새로 구한 값으로 바꿈
+                    merged.tags, merged.tag_post_count = place.tags, place.tag_post_count
                 place = merged
             self._data["places"][place.place_id] = place.model_dump(mode="json")
             self._flush()

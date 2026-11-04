@@ -29,11 +29,14 @@ def _place_card(p: Place, **extra) -> dict:
 
 
 class OneClickMeetService:
-    def __init__(self, repo: JsonRepo, search: SearchProvider, pipeline_factory: Optional[Callable] = None):
-        """pipeline_factory(): 링크·스크린샷 추출 파이프라인(placeflow.Pipeline)을 돌려주는 함수."""
+    def __init__(self, repo: JsonRepo, search: SearchProvider, pipeline_factory: Optional[Callable] = None,
+                 tagger=None):
+        """pipeline_factory(): 링크·스크린샷 추출 파이프라인(placeflow.Pipeline)을 돌려주는 함수.
+        tagger: (선택) blog_tags.BlogTagger — 링크·스크린샷 후보에 네이버 블로그 태그를 붙임."""
         self.repo = repo
         self.search = search
         self.pipeline_factory = pipeline_factory
+        self.tagger = tagger
 
     # ============================================================ 홈 · 지역
     def home(self, user_id: str) -> dict:
@@ -77,18 +80,31 @@ class OneClickMeetService:
             out = pipe.run(text or "")
         else:
             raise DomainError("invalid_input", f"알 수 없는 입력 종류: {kind}")
-        return self._with_cards(candidates_from_records(out.records, self.search, kind, is_saved, out.message))
+        res = candidates_from_records(out.records, self.search, kind, is_saved, out.message)
+        tags, source = None, None
+        if self.tagger is not None:  # 블로그 태그: 실패해도 후보는 그대로
+            places = [c.place for g in res.groups for c in ([g.best] if g.best else []) + list(g.others)]
+            tags, ok = self.tagger.tag_many(places + [c.place for c in res.candidates])
+            source = "naver_blog" if ok else None
+        return self._with_cards(res, tags, source)
 
     @staticmethod
-    def _with_cards(res) -> dict:
-        """후보 Place 에 화면 표시용 subtitle·hours_notice 를 붙임 (groups 와 candidates 모두)."""
+    def _with_cards(res, tags: Optional[dict] = None, tag_source: Optional[str] = None) -> dict:
+        """후보 Place 에 화면 표시용 subtitle·hours_notice (+ 블로그 태그) 를 붙임 (groups 와 candidates 모두)."""
         d = res.model_dump(mode="json")
+        d["tag_source"] = tag_source
+
+        def card(p: Place) -> dict:
+            t = (tags or {}).get(p.place_id)
+            return _place_card(p, tags=[{"label": l, "mention_count": n} for l, n in t.tags] if t else [],
+                               tag_post_count=t.post_count if t else None)
+
         cards = {}
         for c in res.candidates:
-            cards[c.place.place_id] = _place_card(c.place)
+            cards[c.place.place_id] = card(c.place)
         for g in res.groups:
             for c in ([g.best] if g.best else []) + list(g.others):
-                cards.setdefault(c.place.place_id, _place_card(c.place))
+                cards.setdefault(c.place.place_id, card(c.place))
         for c in d["candidates"]:
             c["place"] = cards[c["place"]["place_id"]]
         for g in d.get("groups", []):

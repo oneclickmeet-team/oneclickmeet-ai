@@ -1,2505 +1,2572 @@
 {
- "openapi": "3.1.0",
- "info": {
-  "title": "OneClickMeet AI Internal API",
-  "description": "Spring Boot → FastAPI 내부 API. 장소 후보 검색(P02)·링크/텍스트 인식(P03)·스크린샷 인식(P04)·코스 추천(R01)·지원 지역(P01). 상태 없음 — 저장 장소는 요청에 담아 보낸다. JSON camelCase, 오류는 application/problem+json.",
-  "version": "2.0"
- },
- "paths": {
-  "/internal/v1/place-candidates": {
-   "get": {
-    "tags": [
-     "장소"
-    ],
-    "summary": "P02 장소 후보 검색",
-    "description": "키워드 검색이면 `query`, 주변 놀거리·교체 후보면 선택한 장소의 `latitude`·`longitude`.\n둘 다 보내면 그 좌표 주변에서 키워드 검색. `regionId`만 있고 좌표가 없으면 지역 중심 좌표를 씀.\n사용자 실시간 위치는 받지 않는다.",
-    "operationId": "place_candidates_internal_v1_place_candidates_get",
-    "parameters": [
-     {
-      "name": "query",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string",
-         "maxLength": 100
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "description": "키워드",
-       "title": "Query"
-      },
-      "description": "키워드"
-     },
-     {
-      "name": "latitude",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "number",
-         "maximum": 90,
-         "minimum": -90
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Latitude"
-      }
-     },
-     {
-      "name": "longitude",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "number",
-         "maximum": 180,
-         "minimum": -180
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Longitude"
-      }
-     },
-     {
-      "name": "regionId",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Regionid"
-      }
-     },
-     {
-      "name": "radiusMeters",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "type": "integer",
-       "maximum": 3000,
-       "minimum": 1,
-       "default": 1000,
-       "title": "Radiusmeters"
-      }
-     },
-     {
-      "name": "categoryCode",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "description": "(확장) 좌표 검색을 카테고리로 제한",
-       "title": "Categorycode"
-      },
-      "description": "(확장) 좌표 검색을 카테고리로 제한"
-     },
-     {
-      "name": "page",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "type": "integer",
-       "minimum": 0,
-       "default": 0,
-       "title": "Page"
-      }
-     },
-     {
-      "name": "size",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "type": "integer",
-       "maximum": 30,
-       "minimum": 1,
-       "default": 15,
-       "title": "Size"
-      }
-     },
-     {
-      "name": "X-AI-Key",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
-       "title": "X-Ai-Key"
-      },
-      "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/CandidateSearchResponse"
-        }
-       }
-      }
-     },
-     "400": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Bad Request"
-     },
-     "401": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unauthorized"
-     },
-     "404": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Not Found"
-     },
-     "413": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Content Too Large"
-     },
-     "415": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unsupported Media Type"
-     },
-     "503": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Service Unavailable"
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OneClickMeet AI Internal API",
+    "description": "Spring Boot → FastAPI 내부 API. 장소 후보 검색(P02)·링크/텍스트 인식(P03)·스크린샷 인식(P04)·코스 추천(R01)·지원 지역(P01). 장소 검색은 카카오 로컬, 장소 태그는 네이버 블로그 검색(제목·요약). 상태 없음 — 저장 장소는 요청에 담아 보낸다. JSON camelCase, 오류는 application/problem+json.",
+    "version": "2.1"
   },
-  "/internal/v1/place-recognitions": {
-   "post": {
-    "tags": [
-     "장소"
-    ],
-    "summary": "P03 링크·텍스트 인식",
-    "description": "링크·제목·공유 텍스트에서 검색어를 얻어 실제 장소 후보를 찾는다.\n링크는 robots.txt 를 지키며 **메타 정보(og:title·og:description)만** 읽고, 본문·가격·메뉴는 수집하지 않는다.\n인식 불일치는 200 + NEEDS_SEARCH, 외부 검색 장애는 503. 저장하지 않는다.",
-    "operationId": "place_recognitions_internal_v1_place_recognitions_post",
-    "parameters": [
-     {
-      "name": "X-AI-Key",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
+  "paths": {
+    "/internal/v1/place-candidates": {
+      "get": {
+        "tags": [
+          "장소"
+        ],
+        "summary": "P02 장소 후보 검색",
+        "description": "키워드 검색이면 `query`, 주변 놀거리·교체 후보면 선택한 장소의 `latitude`·`longitude`.\n둘 다 보내면 그 좌표 주변에서 키워드 검색. `regionId`만 있고 좌표가 없으면 지역 중심 좌표를 씀.\n사용자 실시간 위치는 받지 않는다.",
+        "operationId": "place_candidates_internal_v1_place_candidates_get",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "키워드",
+              "title": "Query"
+            },
+            "description": "키워드"
+          },
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 90,
+                  "minimum": -90
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latitude"
+            }
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 180,
+                  "minimum": -180
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Longitude"
+            }
+          },
+          {
+            "name": "regionId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Regionid"
+            }
+          },
+          {
+            "name": "radiusMeters",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 3000,
+              "minimum": 1,
+              "default": 1000,
+              "title": "Radiusmeters"
+            }
+          },
+          {
+            "name": "categoryCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "(확장) 좌표 검색을 카테고리로 제한",
+              "title": "Categorycode"
+            },
+            "description": "(확장) 좌표 검색을 카테고리로 제한"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 30,
+              "minimum": 1,
+              "default": 15,
+              "title": "Size"
+            }
+          },
+          {
+            "name": "X-AI-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
+              "title": "X-Ai-Key"
+            },
+            "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
         }
-       ],
-       "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
-       "title": "X-Ai-Key"
-      },
-      "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/RecognitionRequest"
-       }
       }
-     }
     },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/RecognitionResponse"
-        }
-       }
-      }
-     },
-     "400": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Bad Request"
-     },
-     "401": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unauthorized"
-     },
-     "404": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Not Found"
-     },
-     "413": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Content Too Large"
-     },
-     "415": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unsupported Media Type"
-     },
-     "503": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Service Unavailable"
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/internal/v1/place-image-recognitions": {
-   "post": {
-    "tags": [
-     "장소"
-    ],
-    "summary": "P04 스크린샷 인식",
-    "description": "multipart/form-data. 이미지는 장당 최대 5MiB(AI_MAX_IMAGE_MB). 업로드 파일은 처리 후 바로 지운다.",
-    "operationId": "place_image_recognitions_internal_v1_place_image_recognitions_post",
-    "parameters": [
-     {
-      "name": "X-AI-Key",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
+    "/internal/v1/place-recognitions": {
+      "post": {
+        "tags": [
+          "장소"
+        ],
+        "summary": "P03 링크·텍스트 인식",
+        "description": "링크·제목·공유 텍스트에서 검색어를 얻어 실제 장소 후보를 찾는다.\n링크는 robots.txt 를 지키며 **메타 정보(og:title·og:description)만** 읽고, 본문·가격·메뉴는 수집하지 않는다.\n인식 불일치는 200 + NEEDS_SEARCH, 외부 검색 장애는 503. 저장하지 않는다.\n(확장) 후보마다 네이버 블로그 제목·요약에서 센 리뷰 키워드 `tags` 를 붙인다 (블로그 검색 실패는 태그만 빈 목록).",
+        "operationId": "place_recognitions_internal_v1_place_recognitions_post",
+        "parameters": [
+          {
+            "name": "X-AI-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
+              "title": "X-Ai-Key"
+            },
+            "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecognitionRequest"
+              }
+            }
+          }
         },
-        {
-         "type": "null"
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognitionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
         }
-       ],
-       "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
-       "title": "X-Ai-Key"
-      },
-      "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "multipart/form-data": {
-       "schema": {
-        "$ref": "#/components/schemas/Body_place_image_recognitions_internal_v1_place_image_recognitions_post"
-       }
       }
-     }
     },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/RecognitionResponse"
-        }
-       }
-      }
-     },
-     "400": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Bad Request"
-     },
-     "401": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unauthorized"
-     },
-     "404": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Not Found"
-     },
-     "413": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Content Too Large"
-     },
-     "415": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unsupported Media Type"
-     },
-     "503": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Service Unavailable"
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/internal/v1/place-candidates/replacements": {
-   "post": {
-    "tags": [
-     "장소"
-    ],
-    "summary": "(확장) 교체 후보",
-    "description": "코스 편집 '교체': 앞·뒤 장소 **양쪽**에서 추정 도보 10분 이내이고 코스에 없는 장소. 저장 장소 먼저.",
-    "operationId": "replacements_internal_v1_place_candidates_replacements_post",
-    "parameters": [
-     {
-      "name": "X-AI-Key",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
+    "/internal/v1/place-image-recognitions": {
+      "post": {
+        "tags": [
+          "장소"
+        ],
+        "summary": "P04 스크린샷 인식",
+        "description": "multipart/form-data. 이미지는 장당 최대 5MiB(AI_MAX_IMAGE_MB). 업로드 파일은 처리 후 바로 지운다.",
+        "operationId": "place_image_recognitions_internal_v1_place_image_recognitions_post",
+        "parameters": [
+          {
+            "name": "X-AI-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
+              "title": "X-Ai-Key"
+            },
+            "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_place_image_recognitions_internal_v1_place_image_recognitions_post"
+              }
+            }
+          }
         },
-        {
-         "type": "null"
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognitionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
         }
-       ],
-       "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
-       "title": "X-Ai-Key"
-      },
-      "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/ReplacementRequest"
-       }
       }
-     }
     },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/ReplacementResponse"
-        }
-       }
-      }
-     },
-     "400": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Bad Request"
-     },
-     "401": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unauthorized"
-     },
-     "404": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Not Found"
-     },
-     "413": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Content Too Large"
-     },
-     "415": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unsupported Media Type"
-     },
-     "503": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Service Unavailable"
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/internal/v1/course-recommendations": {
-   "post": {
-    "tags": [
-     "추천"
-    ],
-    "summary": "R01 코스 추천",
-    "description": "방문 순서별 카테고리(categorySequence)와 필수 장소 위치(requiredPlaceOrder)를 지켜 3~5곳 코스를 보통 2~3개\n(유효한 코스가 1개면 1개) 돌려준다. 이웃 장소 사이 추정 도보 10분 이내, 기준 반경 약 1km, 지역 자동 확장 없음.\n\n- 결과가 없으면 200 + `courses: []` + `reason`\n- 잘못된 형식 400, 필수 장소 정보 없음 404, 외부 검색 실패 503\n- 필수 장소의 카테고리가 그 자리와 달라도 지정 위치에 그대로 넣는다",
-    "operationId": "course_recommendations_internal_v1_course_recommendations_post",
-    "parameters": [
-     {
-      "name": "X-AI-Key",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
+    "/internal/v1/place-candidates/replacements": {
+      "post": {
+        "tags": [
+          "장소"
+        ],
+        "summary": "(확장) 교체 후보",
+        "description": "코스 편집 '교체': 앞·뒤 장소 **양쪽**에서 추정 도보 10분 이내이고 코스에 없는 장소. 저장 장소 먼저.",
+        "operationId": "replacements_internal_v1_place_candidates_replacements_post",
+        "parameters": [
+          {
+            "name": "X-AI-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
+              "title": "X-Ai-Key"
+            },
+            "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplacementRequest"
+              }
+            }
+          }
         },
-        {
-         "type": "null"
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplacementResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
         }
-       ],
-       "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
-       "title": "X-Ai-Key"
-      },
-      "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/CourseRecommendationRequest"
-       }
       }
-     }
     },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/CourseRecommendationResponse"
-        }
-       }
-      }
-     },
-     "400": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Bad Request"
-     },
-     "401": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unauthorized"
-     },
-     "404": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Not Found"
-     },
-     "413": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Content Too Large"
-     },
-     "415": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unsupported Media Type"
-     },
-     "503": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Service Unavailable"
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/internal/v1/regions": {
-   "get": {
-    "tags": [
-     "추천"
-    ],
-    "summary": "P01 지원 지역",
-    "description": "데모 지원 지역 6곳 (중심 좌표·반경은 근사값, 경계는 후속 확정).",
-    "operationId": "regions_internal_v1_regions_get",
-    "parameters": [
-     {
-      "name": "X-AI-Key",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
+    "/internal/v1/course-recommendations": {
+      "post": {
+        "tags": [
+          "추천"
+        ],
+        "summary": "R01 코스 추천",
+        "description": "방문 순서별 카테고리(categorySequence)와 필수 장소 위치(requiredPlaceOrder)를 지켜 3~5곳 코스를 보통 2~3개\n(유효한 코스가 1개면 1개) 돌려준다. 이웃 장소 사이 추정 도보 10분 이내, 기준 반경 약 1km, 지역 자동 확장 없음.\n\n- 결과가 없으면 200 + `courses: []` + `reason`\n- 잘못된 형식 400, 필수 장소 정보 없음 404, 외부 검색 실패 503\n- 필수 장소의 카테고리가 그 자리와 달라도 지정 위치에 그대로 넣는다",
+        "operationId": "course_recommendations_internal_v1_course_recommendations_post",
+        "parameters": [
+          {
+            "name": "X-AI-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
+              "title": "X-Ai-Key"
+            },
+            "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseRecommendationRequest"
+              }
+            }
+          }
         },
-        {
-         "type": "null"
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseRecommendationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
         }
-       ],
-       "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
-       "title": "X-Ai-Key"
-      },
-      "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/RegionList"
-        }
-       }
       }
-     },
-     "400": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
+    },
+    "/internal/v1/regions": {
+      "get": {
+        "tags": [
+          "추천"
+        ],
+        "summary": "P01 지원 지역",
+        "description": "데모 지원 지역 6곳 (중심 좌표·반경은 근사값, 경계는 후속 확정).",
+        "operationId": "regions_internal_v1_regions_get",
+        "parameters": [
+          {
+            "name": "X-AI-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
+              "title": "X-Ai-Key"
+            },
+            "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionList"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
         }
-       }
-      },
-      "description": "Bad Request"
-     },
-     "401": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unauthorized"
-     },
-     "404": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Not Found"
-     },
-     "413": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Content Too Large"
-     },
-     "415": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unsupported Media Type"
-     },
-     "503": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Service Unavailable"
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
       }
-     }
+    },
+    "/internal/v1/categories": {
+      "get": {
+        "tags": [
+          "추천"
+        ],
+        "summary": "추천 카테고리 코드",
+        "description": "categorySequence 에 쓰는 코드 7개 (v2 확정).",
+        "operationId": "categories_internal_v1_categories_get",
+        "parameters": [
+          {
+            "name": "X-AI-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
+              "title": "X-Ai-Key"
+            },
+            "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryList"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {},
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "상태"
+        ],
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
     }
-   }
   },
-  "/internal/v1/categories": {
-   "get": {
-    "tags": [
-     "추천"
-    ],
-    "summary": "추천 카테고리 코드",
-    "description": "categorySequence 에 쓰는 코드 7개 (v2 확정).",
-    "operationId": "categories_internal_v1_categories_get",
-    "parameters": [
-     {
-      "name": "X-AI-Key",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
+  "components": {
+    "schemas": {
+      "AnchorIn": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "REGION",
+              "PLACE"
+            ],
+            "title": "Type"
+          },
+          "regionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regionid",
+            "description": "REGION: JAMSIL · SUNGSHIN · HANSUNG · HYEHWA · SEOCHON · YEONNAM"
+          },
+          "placeId": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeid",
+            "description": "PLACE: 필수 장소의 placeId (anchorPlace 또는 savedPlaces 에 정보 포함)"
+          }
         },
-        {
-         "type": "null"
-        }
-       ],
-       "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)",
-       "title": "X-Ai-Key"
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "AnchorIn"
       },
-      "description": "AI_SERVICE_KEY 를 설정한 경우 필수 (Spring → FastAPI 내부 인증)"
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/CategoryList"
-        }
-       }
+      "Body_place_image_recognitions_internal_v1_place_image_recognitions_post": {
+        "properties": {
+          "image": {
+            "type": "string",
+            "format": "binary",
+            "title": "Image",
+            "description": "스크린샷 (JPEG·PNG·WebP)"
+          },
+          "extra_images": {
+            "items": {
+              "type": "string",
+              "format": "binary"
+            },
+            "type": "array",
+            "title": "Extra Images",
+            "description": "(확장) 같은 장소의 추가 화면 최대 4장"
+          },
+          "shared_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared Text",
+            "description": "(확장) 함께 붙여넣은 캡션"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "title": "Body_place_image_recognitions_internal_v1_place_image_recognitions_post"
+      },
+      "CandidateSearchResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceCandidate"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "hasNext": {
+            "type": "boolean",
+            "title": "Hasnext"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "size",
+          "hasNext"
+        ],
+        "title": "CandidateSearchResponse"
+      },
+      "CategoryList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CategoryList"
+      },
+      "CategoryOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "MEAL",
+              "CAFE",
+              "BAR",
+              "ACTIVITY",
+              "CULTURE",
+              "WALK",
+              "SHOPPING"
+            ],
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "CategoryOut"
+      },
+      "CoursePlaceOut": {
+        "properties": {
+          "visitOrder": {
+            "type": "integer",
+            "title": "Visitorder"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          },
+          "categoryCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "MEAL",
+                  "CAFE",
+                  "BAR",
+                  "ACTIVITY",
+                  "CULTURE",
+                  "WALK",
+                  "SHOPPING"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categorycode"
+          },
+          "categoryLabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categorylabel"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "PERSONAL",
+              "SHARED",
+              "EXTERNAL"
+            ],
+            "title": "Source"
+          },
+          "placeId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeid",
+            "description": "저장 장소면 요청에서 받은 placeId, 외부 후보면 null"
+          },
+          "isAnchor": {
+            "type": "boolean",
+            "title": "Isanchor",
+            "default": false
+          },
+          "sourceUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceurl"
+          }
+        },
+        "type": "object",
+        "required": [
+          "visitOrder",
+          "name",
+          "latitude",
+          "longitude",
+          "source"
+        ],
+        "title": "CoursePlaceOut"
+      },
+      "CourseRecommendationRequest": {
+        "properties": {
+          "anchor": {
+            "$ref": "#/components/schemas/AnchorIn"
+          },
+          "placeCount": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 3.0,
+            "title": "Placecount"
+          },
+          "categorySequence": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "MEAL",
+                "CAFE",
+                "BAR",
+                "ACTIVITY",
+                "CULTURE",
+                "WALK",
+                "SHOPPING"
+              ]
+            },
+            "type": "array",
+            "maxItems": 5,
+            "minItems": 3,
+            "title": "Categorysequence"
+          },
+          "requiredPlaceOrder": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requiredplaceorder",
+            "description": "PLACE 기준일 때 필수 장소 방문 위치"
+          },
+          "anchorPlace": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SavedPlaceIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "필수 장소 정보. 없으면 savedPlaces 에서 placeId 로 찾음"
+          },
+          "savedPlaces": {
+            "items": {
+              "$ref": "#/components/schemas/SavedPlaceIn"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Savedplaces",
+            "description": "추천 재료: 본인 개인 장소 + (선택) 관계의 공동 장소"
+          },
+          "excludeCandidateKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Excludecandidatekeys",
+            "description": "(확장) '다시 추천받기': 앞에서 받은 candidateKey 들"
+          }
+        },
+        "type": "object",
+        "required": [
+          "anchor",
+          "placeCount",
+          "categorySequence"
+        ],
+        "title": "CourseRecommendationRequest"
+      },
+      "CourseRecommendationResponse": {
+        "properties": {
+          "courses": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendedCourseOut"
+            },
+            "type": "array",
+            "title": "Courses"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "INSUFFICIENT_PLACES",
+                  "UNSUPPORTED_REGION",
+                  "NO_MORE_COURSES"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "walkingTimeMethod": {
+            "type": "string",
+            "const": "COORDINATE_ESTIMATE",
+            "title": "Walkingtimemethod",
+            "default": "COORDINATE_ESTIMATE"
+          }
+        },
+        "type": "object",
+        "required": [
+          "courses"
+        ],
+        "title": "CourseRecommendationResponse"
+      },
+      "FieldError": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "message"
+        ],
+        "title": "FieldError"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "UP",
+            "title": "Status",
+            "default": "UP"
+          },
+          "workflowVersion": {
+            "type": "string",
+            "title": "Workflowversion"
+          },
+          "searchProvider": {
+            "type": "string",
+            "title": "Searchprovider"
+          },
+          "extractor": {
+            "type": "string",
+            "title": "Extractor"
+          },
+          "ocr": {
+            "type": "string",
+            "title": "Ocr"
+          },
+          "ocrReady": {
+            "type": "boolean",
+            "title": "Ocrready"
+          },
+          "authRequired": {
+            "type": "boolean",
+            "title": "Authrequired"
+          },
+          "tagProvider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tagprovider",
+            "description": "(확장) 장소 태그 제공자. 예: naver_blog+openai:gpt-4o-mini / 꺼져 있으면 null"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workflowVersion",
+          "searchProvider",
+          "extractor",
+          "ocr",
+          "ocrReady",
+          "authRequired"
+        ],
+        "title": "Health"
+      },
+      "PlaceCandidate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          },
+          "sourceUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceurl",
+            "description": "장소 상세 페이지 (카카오맵·네이버 등)"
+          },
+          "categoryLabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categorylabel"
+          },
+          "categoryCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "MEAL",
+                  "CAFE",
+                  "BAR",
+                  "ACTIVITY",
+                  "CULTURE",
+                  "WALK",
+                  "SHOPPING"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categorycode"
+          },
+          "openingHours": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openinghours",
+            "description": "확보했을 때만. 없으면 앱이 '운영시간 확인 필요' 안내"
+          },
+          "distanceMeters": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distancemeters",
+            "description": "좌표 검색일 때 기준점까지 거리"
+          },
+          "savedPlaceId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Savedplaceid",
+            "description": "(확장) 요청의 savedPlaces 중 같은 장소가 있으면 그 placeId"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "latitude",
+          "longitude"
+        ],
+        "title": "PlaceCandidate",
+        "description": "저장 전 확인용 장소 후보 (TRD CandidateSearchResponse.items). placeId 를 갖는 저장 본문이 아니다."
+      },
+      "PlaceSnapshotIn": {
+        "properties": {
+          "placeId": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeid",
+            "description": "저장 장소면 Spring 의 ID"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "PERSONAL",
+              "SHARED",
+              "EXTERNAL"
+            ],
+            "title": "Source",
+            "default": "EXTERNAL"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "latitude": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Longitude"
+          },
+          "categoryCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "MEAL",
+                  "CAFE",
+                  "BAR",
+                  "ACTIVITY",
+                  "CULTURE",
+                  "WALK",
+                  "SHOPPING"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categorycode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "latitude",
+          "longitude"
+        ],
+        "title": "PlaceSnapshotIn",
+        "description": "코스 안의 장소 (저장 장소가 아닐 수도 있음). 좌표 필수."
+      },
+      "PlaceTag": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "태그 (예: 분위기가 좋아요)"
+          },
+          "mentionCount": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Mentioncount",
+            "description": "이 태그에 해당한다고 판단된 블로그 글 수"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "mentionCount"
+        ],
+        "title": "PlaceTag",
+        "description": "(확장) 네이버 블로그 제목·요약을 OpenAI 가 읽고 고른 장소 태그. 네이버의 실제 리뷰 선택 횟수가 아니다."
+      },
+      "Problem": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "default": "about:blank"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "integer",
+            "title": "Status"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "사람이 읽는 설명. 클라이언트는 파싱하지 않는다"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "도메인-HTTP 상태 코드",
+            "examples": [
+              "COMMON-0400"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "examples": [
+              "INVALID_INPUT"
+            ]
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FieldError"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "status",
+          "detail",
+          "code",
+          "reason"
+        ],
+        "title": "Problem"
+      },
+      "RecognitionCandidate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          },
+          "sourceUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceurl",
+            "description": "장소 상세 페이지 (카카오맵·네이버 등)"
+          },
+          "categoryLabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categorylabel"
+          },
+          "categoryCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "MEAL",
+                  "CAFE",
+                  "BAR",
+                  "ACTIVITY",
+                  "CULTURE",
+                  "WALK",
+                  "SHOPPING"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categorycode"
+          },
+          "openingHours": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openinghours",
+            "description": "확보했을 때만. 없으면 앱이 '운영시간 확인 필요' 안내"
+          },
+          "distanceMeters": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distancemeters",
+            "description": "좌표 검색일 때 기준점까지 거리"
+          },
+          "savedPlaceId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Savedplaceid",
+            "description": "(확장) 요청의 savedPlaces 중 같은 장소가 있으면 그 placeId"
+          },
+          "matchType": {
+            "type": "string",
+            "enum": [
+              "EXACT",
+              "SIMILAR"
+            ],
+            "title": "Matchtype",
+            "description": "EXACT=확실한 일치(기본 선택) / SIMILAR=비슷한 이름"
+          },
+          "matchReasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Matchreasons",
+            "description": "주소 일치 · 이름 일치 · 이름 일부만 같아요 · 주소 다름 …"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceTag"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "(확장) 블로그 언급이 많은 순 최대 5개. 태그 기능이 꺼졌거나 언급이 없으면 []"
+          },
+          "tagPostCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tagpostcount",
+            "description": "(확장) 태그를 센 블로그 글 수 (가게 이름이 나온 글). 태그를 못 구했으면 null"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "latitude",
+          "longitude",
+          "matchType"
+        ],
+        "title": "RecognitionCandidate"
+      },
+      "RecognitionGroup": {
+        "properties": {
+          "order": {
+            "type": "integer",
+            "title": "Order"
+          },
+          "extractedName": {
+            "type": "string",
+            "title": "Extractedname"
+          },
+          "extractedAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extractedaddress"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "MATCHED",
+              "SIMILAR_ONLY",
+              "NOT_FOUND"
+            ],
+            "title": "Status"
+          },
+          "best": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecognitionCandidate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "matchType=EXACT 1순위. 없으면 null"
+          },
+          "others": {
+            "items": {
+              "$ref": "#/components/schemas/RecognitionCandidate"
+            },
+            "type": "array",
+            "title": "Others"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order",
+          "extractedName",
+          "status"
+        ],
+        "title": "RecognitionGroup",
+        "description": "(확장) 링크에 나온 장소 1곳 = 묶음 1개 (릴스 '맛집 4곳' 대응)."
+      },
+      "RecognitionRequest": {
+        "properties": {
+          "sourceUrl": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2048
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceurl"
+          },
+          "sharedText": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharedtext",
+            "description": "공유 텍스트·캡션 (앱 '공유 → 복사' 문구 포함)"
+          },
+          "savedPlaces": {
+            "items": {
+              "$ref": "#/components/schemas/SavedPlaceIn"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Savedplaces",
+            "description": "(확장) 보내면 같은 장소 후보에 savedPlaceId 표시"
+          }
+        },
+        "type": "object",
+        "title": "RecognitionRequest",
+        "description": "P03 링크·텍스트 인식. sourceUrl·sharedText 중 하나 이상 필수."
+      },
+      "RecognitionResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "CANDIDATES_FOUND",
+              "NEEDS_SEARCH"
+            ],
+            "title": "Status"
+          },
+          "extractedQuery": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extractedquery",
+            "description": "직접 검색 화면에 미리 채울 검색어"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/RecognitionCandidate"
+            },
+            "type": "array",
+            "title": "Candidates",
+            "description": "모든 묶음의 best → others 순"
+          },
+          "sourceUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceurl"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/RecognitionGroup"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "tagSource": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "NAVER_BLOG"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tagsource",
+            "description": "(확장) 태그 출처. 태그 기능이 꺼졌거나 블로그 검색이 모두 실패하면 null (인식 결과는 그대로)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "RecognitionResponse"
+      },
+      "RecommendedCourseOut": {
+        "properties": {
+          "candidateKey": {
+            "type": "string",
+            "title": "Candidatekey",
+            "description": "이번 응답에서 코스를 구분하는 값. 영구 courseId 아님"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/CoursePlaceOut"
+            },
+            "type": "array",
+            "title": "Places"
+          },
+          "walkingLegs": {
+            "items": {
+              "$ref": "#/components/schemas/WalkingLegOut"
+            },
+            "type": "array",
+            "title": "Walkinglegs"
+          },
+          "totalWalkingMinutes": {
+            "type": "integer",
+            "title": "Totalwalkingminutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidateKey",
+          "title",
+          "places",
+          "walkingLegs",
+          "totalWalkingMinutes"
+        ],
+        "title": "RecommendedCourseOut"
+      },
+      "RegionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RegionOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "RegionList"
+      },
+      "RegionOut": {
+        "properties": {
+          "regionId": {
+            "type": "string",
+            "title": "Regionid"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          },
+          "radiusMeters": {
+            "type": "integer",
+            "title": "Radiusmeters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "regionId",
+          "name",
+          "latitude",
+          "longitude",
+          "radiusMeters"
+        ],
+        "title": "RegionOut"
+      },
+      "ReplacementCandidate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          },
+          "sourceUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceurl",
+            "description": "장소 상세 페이지 (카카오맵·네이버 등)"
+          },
+          "categoryLabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categorylabel"
+          },
+          "categoryCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "MEAL",
+                  "CAFE",
+                  "BAR",
+                  "ACTIVITY",
+                  "CULTURE",
+                  "WALK",
+                  "SHOPPING"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categorycode"
+          },
+          "openingHours": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openinghours",
+            "description": "확보했을 때만. 없으면 앱이 '운영시간 확인 필요' 안내"
+          },
+          "distanceMeters": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distancemeters",
+            "description": "좌표 검색일 때 기준점까지 거리"
+          },
+          "savedPlaceId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Savedplaceid",
+            "description": "(확장) 요청의 savedPlaces 중 같은 장소가 있으면 그 placeId"
+          },
+          "placeSource": {
+            "type": "string",
+            "enum": [
+              "PERSONAL",
+              "SHARED",
+              "EXTERNAL"
+            ],
+            "title": "Placesource"
+          },
+          "placeId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placeid"
+          },
+          "walkFromPrevMinutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Walkfromprevminutes"
+          },
+          "walkToNextMinutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Walktonextminutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "latitude",
+          "longitude",
+          "placeSource"
+        ],
+        "title": "ReplacementCandidate"
+      },
+      "ReplacementRequest": {
+        "properties": {
+          "coursePlaces": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceSnapshotIn"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Courseplaces",
+            "description": "지금 코스 장소 (방문 순서대로)"
+          },
+          "replaceVisitOrder": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Replacevisitorder",
+            "description": "교체할 장소의 방문 순서 (1부터)"
+          },
+          "categoryCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "MEAL",
+                  "CAFE",
+                  "BAR",
+                  "ACTIVITY",
+                  "CULTURE",
+                  "WALK",
+                  "SHOPPING"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categorycode",
+            "description": "없으면 교체할 장소와 같은 카테고리"
+          },
+          "savedPlaces": {
+            "items": {
+              "$ref": "#/components/schemas/SavedPlaceIn"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Savedplaces"
+          },
+          "size": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Size",
+            "default": 8
+          }
+        },
+        "type": "object",
+        "required": [
+          "coursePlaces",
+          "replaceVisitOrder"
+        ],
+        "title": "ReplacementRequest",
+        "description": "(확장) 코스 편집 '교체': 앞·뒤 장소 양쪽에서 도보 10분 이내인 후보."
+      },
+      "ReplacementResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReplacementCandidate"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ReplacementResponse"
+      },
+      "SavedPlaceIn": {
+        "properties": {
+          "placeId": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Placeid",
+            "description": "Spring 의 장소 ID (공동 장소도 이 값 하나로 식별)"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "PERSONAL",
+              "SHARED"
+            ],
+            "title": "Source",
+            "default": "PERSONAL"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "latitude": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Longitude"
+          },
+          "categoryCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "MEAL",
+                  "CAFE",
+                  "BAR",
+                  "ACTIVITY",
+                  "CULTURE",
+                  "WALK",
+                  "SHOPPING"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categorycode",
+            "description": "있으면 그대로 사용, 없으면 AI 가 검색으로 추론"
+          }
+        },
+        "type": "object",
+        "required": [
+          "placeId",
+          "name",
+          "latitude",
+          "longitude"
+        ],
+        "title": "SavedPlaceIn",
+        "description": "Spring 이 보내는 저장 장소 1곳 (개인 또는 공동). AI 서버는 저장하지 않는다."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WalkingLegOut": {
+        "properties": {
+          "fromVisitOrder": {
+            "type": "integer",
+            "title": "Fromvisitorder"
+          },
+          "toVisitOrder": {
+            "type": "integer",
+            "title": "Tovisitorder"
+          },
+          "estimatedMinutes": {
+            "type": "integer",
+            "title": "Estimatedminutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fromVisitOrder",
+          "toVisitOrder",
+          "estimatedMinutes"
+        ],
+        "title": "WalkingLegOut"
       }
-     },
-     "400": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Bad Request"
-     },
-     "401": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unauthorized"
-     },
-     "404": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Not Found"
-     },
-     "413": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Content Too Large"
-     },
-     "415": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Unsupported Media Type"
-     },
-     "503": {
-      "content": {
-       "application/problem+json": {},
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Problem"
-        }
-       }
-      },
-      "description": "Service Unavailable"
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
     }
-   }
-  },
-  "/health": {
-   "get": {
-    "tags": [
-     "상태"
-    ],
-    "summary": "Health",
-    "operationId": "health_health_get",
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Health"
-        }
-       }
-      }
-     }
-    }
-   }
   }
- },
- "components": {
-  "schemas": {
-   "AnchorIn": {
-    "properties": {
-     "type": {
-      "type": "string",
-      "enum": [
-       "REGION",
-       "PLACE"
-      ],
-      "title": "Type"
-     },
-     "regionId": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Regionid",
-      "description": "REGION: JAMSIL · SUNGSHIN · HANSUNG · HYEHWA · SEOCHON · YEONNAM"
-     },
-     "placeId": {
-      "anyOf": [
-       {
-        "type": "integer",
-        "exclusiveMinimum": 0.0
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Placeid",
-      "description": "PLACE: 필수 장소의 placeId (anchorPlace 또는 savedPlaces 에 정보 포함)"
-     }
-    },
-    "type": "object",
-    "required": [
-     "type"
-    ],
-    "title": "AnchorIn"
-   },
-   "Body_place_image_recognitions_internal_v1_place_image_recognitions_post": {
-    "properties": {
-     "image": {
-      "type": "string",
-      "format": "binary",
-      "title": "Image",
-      "description": "스크린샷 (JPEG·PNG·WebP)"
-     },
-     "extra_images": {
-      "items": {
-       "type": "string",
-       "format": "binary"
-      },
-      "type": "array",
-      "title": "Extra Images",
-      "description": "(확장) 같은 장소의 추가 화면 최대 4장"
-     },
-     "shared_text": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Shared Text",
-      "description": "(확장) 함께 붙여넣은 캡션"
-     }
-    },
-    "type": "object",
-    "required": [
-     "image"
-    ],
-    "title": "Body_place_image_recognitions_internal_v1_place_image_recognitions_post"
-   },
-   "CandidateSearchResponse": {
-    "properties": {
-     "items": {
-      "items": {
-       "$ref": "#/components/schemas/PlaceCandidate"
-      },
-      "type": "array",
-      "title": "Items"
-     },
-     "page": {
-      "type": "integer",
-      "title": "Page"
-     },
-     "size": {
-      "type": "integer",
-      "title": "Size"
-     },
-     "hasNext": {
-      "type": "boolean",
-      "title": "Hasnext"
-     }
-    },
-    "type": "object",
-    "required": [
-     "items",
-     "page",
-     "size",
-     "hasNext"
-    ],
-    "title": "CandidateSearchResponse"
-   },
-   "CategoryList": {
-    "properties": {
-     "items": {
-      "items": {
-       "$ref": "#/components/schemas/CategoryOut"
-      },
-      "type": "array",
-      "title": "Items"
-     }
-    },
-    "type": "object",
-    "required": [
-     "items"
-    ],
-    "title": "CategoryList"
-   },
-   "CategoryOut": {
-    "properties": {
-     "code": {
-      "type": "string",
-      "enum": [
-       "MEAL",
-       "CAFE",
-       "BAR",
-       "ACTIVITY",
-       "CULTURE",
-       "WALK",
-       "SHOPPING"
-      ],
-      "title": "Code"
-     },
-     "label": {
-      "type": "string",
-      "title": "Label"
-     }
-    },
-    "type": "object",
-    "required": [
-     "code",
-     "label"
-    ],
-    "title": "CategoryOut"
-   },
-   "CoursePlaceOut": {
-    "properties": {
-     "visitOrder": {
-      "type": "integer",
-      "title": "Visitorder"
-     },
-     "name": {
-      "type": "string",
-      "title": "Name"
-     },
-     "address": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Address"
-     },
-     "latitude": {
-      "type": "number",
-      "title": "Latitude"
-     },
-     "longitude": {
-      "type": "number",
-      "title": "Longitude"
-     },
-     "categoryCode": {
-      "anyOf": [
-       {
-        "type": "string",
-        "enum": [
-         "MEAL",
-         "CAFE",
-         "BAR",
-         "ACTIVITY",
-         "CULTURE",
-         "WALK",
-         "SHOPPING"
-        ]
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Categorycode"
-     },
-     "categoryLabel": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Categorylabel"
-     },
-     "source": {
-      "type": "string",
-      "enum": [
-       "PERSONAL",
-       "SHARED",
-       "EXTERNAL"
-      ],
-      "title": "Source"
-     },
-     "placeId": {
-      "anyOf": [
-       {
-        "type": "integer"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Placeid",
-      "description": "저장 장소면 요청에서 받은 placeId, 외부 후보면 null"
-     },
-     "isAnchor": {
-      "type": "boolean",
-      "title": "Isanchor",
-      "default": false
-     },
-     "sourceUrl": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Sourceurl"
-     }
-    },
-    "type": "object",
-    "required": [
-     "visitOrder",
-     "name",
-     "latitude",
-     "longitude",
-     "source"
-    ],
-    "title": "CoursePlaceOut"
-   },
-   "CourseRecommendationRequest": {
-    "properties": {
-     "anchor": {
-      "$ref": "#/components/schemas/AnchorIn"
-     },
-     "placeCount": {
-      "type": "integer",
-      "maximum": 5.0,
-      "minimum": 3.0,
-      "title": "Placecount"
-     },
-     "categorySequence": {
-      "items": {
-       "type": "string",
-       "enum": [
-        "MEAL",
-        "CAFE",
-        "BAR",
-        "ACTIVITY",
-        "CULTURE",
-        "WALK",
-        "SHOPPING"
-       ]
-      },
-      "type": "array",
-      "maxItems": 5,
-      "minItems": 3,
-      "title": "Categorysequence"
-     },
-     "requiredPlaceOrder": {
-      "anyOf": [
-       {
-        "type": "integer",
-        "maximum": 5.0,
-        "minimum": 1.0
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Requiredplaceorder",
-      "description": "PLACE 기준일 때 필수 장소 방문 위치"
-     },
-     "anchorPlace": {
-      "anyOf": [
-       {
-        "$ref": "#/components/schemas/SavedPlaceIn"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "description": "필수 장소 정보. 없으면 savedPlaces 에서 placeId 로 찾음"
-     },
-     "savedPlaces": {
-      "items": {
-       "$ref": "#/components/schemas/SavedPlaceIn"
-      },
-      "type": "array",
-      "maxItems": 500,
-      "title": "Savedplaces",
-      "description": "추천 재료: 본인 개인 장소 + (선택) 관계의 공동 장소"
-     },
-     "excludeCandidateKeys": {
-      "items": {
-       "type": "string"
-      },
-      "type": "array",
-      "maxItems": 200,
-      "title": "Excludecandidatekeys",
-      "description": "(확장) '다시 추천받기': 앞에서 받은 candidateKey 들"
-     }
-    },
-    "type": "object",
-    "required": [
-     "anchor",
-     "placeCount",
-     "categorySequence"
-    ],
-    "title": "CourseRecommendationRequest"
-   },
-   "CourseRecommendationResponse": {
-    "properties": {
-     "courses": {
-      "items": {
-       "$ref": "#/components/schemas/RecommendedCourseOut"
-      },
-      "type": "array",
-      "title": "Courses"
-     },
-     "reason": {
-      "anyOf": [
-       {
-        "type": "string",
-        "enum": [
-         "INSUFFICIENT_PLACES",
-         "UNSUPPORTED_REGION",
-         "NO_MORE_COURSES"
-        ]
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Reason"
-     },
-     "walkingTimeMethod": {
-      "type": "string",
-      "const": "COORDINATE_ESTIMATE",
-      "title": "Walkingtimemethod",
-      "default": "COORDINATE_ESTIMATE"
-     }
-    },
-    "type": "object",
-    "required": [
-     "courses"
-    ],
-    "title": "CourseRecommendationResponse"
-   },
-   "FieldError": {
-    "properties": {
-     "field": {
-      "type": "string",
-      "title": "Field"
-     },
-     "message": {
-      "type": "string",
-      "title": "Message"
-     }
-    },
-    "type": "object",
-    "required": [
-     "field",
-     "message"
-    ],
-    "title": "FieldError"
-   },
-   "HTTPValidationError": {
-    "properties": {
-     "detail": {
-      "items": {
-       "$ref": "#/components/schemas/ValidationError"
-      },
-      "type": "array",
-      "title": "Detail"
-     }
-    },
-    "type": "object",
-    "title": "HTTPValidationError"
-   },
-   "Health": {
-    "properties": {
-     "status": {
-      "type": "string",
-      "const": "UP",
-      "title": "Status",
-      "default": "UP"
-     },
-     "workflowVersion": {
-      "type": "string",
-      "title": "Workflowversion"
-     },
-     "searchProvider": {
-      "type": "string",
-      "title": "Searchprovider"
-     },
-     "extractor": {
-      "type": "string",
-      "title": "Extractor"
-     },
-     "ocr": {
-      "type": "string",
-      "title": "Ocr"
-     },
-     "ocrReady": {
-      "type": "boolean",
-      "title": "Ocrready"
-     },
-     "authRequired": {
-      "type": "boolean",
-      "title": "Authrequired"
-     }
-    },
-    "type": "object",
-    "required": [
-     "workflowVersion",
-     "searchProvider",
-     "extractor",
-     "ocr",
-     "ocrReady",
-     "authRequired"
-    ],
-    "title": "Health"
-   },
-   "PlaceCandidate": {
-    "properties": {
-     "name": {
-      "type": "string",
-      "title": "Name"
-     },
-     "address": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Address"
-     },
-     "latitude": {
-      "type": "number",
-      "title": "Latitude"
-     },
-     "longitude": {
-      "type": "number",
-      "title": "Longitude"
-     },
-     "sourceUrl": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Sourceurl",
-      "description": "장소 상세 페이지 (카카오맵·네이버 등)"
-     },
-     "categoryLabel": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Categorylabel"
-     },
-     "categoryCode": {
-      "anyOf": [
-       {
-        "type": "string",
-        "enum": [
-         "MEAL",
-         "CAFE",
-         "BAR",
-         "ACTIVITY",
-         "CULTURE",
-         "WALK",
-         "SHOPPING"
-        ]
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Categorycode"
-     },
-     "openingHours": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Openinghours",
-      "description": "확보했을 때만. 없으면 앱이 '운영시간 확인 필요' 안내"
-     },
-     "distanceMeters": {
-      "anyOf": [
-       {
-        "type": "integer"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Distancemeters",
-      "description": "좌표 검색일 때 기준점까지 거리"
-     },
-     "savedPlaceId": {
-      "anyOf": [
-       {
-        "type": "integer"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Savedplaceid",
-      "description": "(확장) 요청의 savedPlaces 중 같은 장소가 있으면 그 placeId"
-     }
-    },
-    "type": "object",
-    "required": [
-     "name",
-     "latitude",
-     "longitude"
-    ],
-    "title": "PlaceCandidate",
-    "description": "저장 전 확인용 장소 후보 (TRD CandidateSearchResponse.items). placeId 를 갖는 저장 본문이 아니다."
-   },
-   "PlaceSnapshotIn": {
-    "properties": {
-     "placeId": {
-      "anyOf": [
-       {
-        "type": "integer",
-        "exclusiveMinimum": 0.0
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Placeid",
-      "description": "저장 장소면 Spring 의 ID"
-     },
-     "source": {
-      "type": "string",
-      "enum": [
-       "PERSONAL",
-       "SHARED",
-       "EXTERNAL"
-      ],
-      "title": "Source",
-      "default": "EXTERNAL"
-     },
-     "name": {
-      "type": "string",
-      "maxLength": 255,
-      "minLength": 1,
-      "title": "Name"
-     },
-     "address": {
-      "anyOf": [
-       {
-        "type": "string",
-        "maxLength": 500
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Address"
-     },
-     "latitude": {
-      "type": "number",
-      "maximum": 90.0,
-      "minimum": -90.0,
-      "title": "Latitude"
-     },
-     "longitude": {
-      "type": "number",
-      "maximum": 180.0,
-      "minimum": -180.0,
-      "title": "Longitude"
-     },
-     "categoryCode": {
-      "anyOf": [
-       {
-        "type": "string",
-        "enum": [
-         "MEAL",
-         "CAFE",
-         "BAR",
-         "ACTIVITY",
-         "CULTURE",
-         "WALK",
-         "SHOPPING"
-        ]
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Categorycode"
-     }
-    },
-    "type": "object",
-    "required": [
-     "name",
-     "latitude",
-     "longitude"
-    ],
-    "title": "PlaceSnapshotIn",
-    "description": "코스 안의 장소 (저장 장소가 아닐 수도 있음). 좌표 필수."
-   },
-   "Problem": {
-    "properties": {
-     "type": {
-      "type": "string",
-      "title": "Type",
-      "default": "about:blank"
-     },
-     "title": {
-      "type": "string",
-      "title": "Title"
-     },
-     "status": {
-      "type": "integer",
-      "title": "Status"
-     },
-     "detail": {
-      "type": "string",
-      "title": "Detail",
-      "description": "사람이 읽는 설명. 클라이언트는 파싱하지 않는다"
-     },
-     "instance": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Instance"
-     },
-     "code": {
-      "type": "string",
-      "title": "Code",
-      "description": "도메인-HTTP 상태 코드",
-      "examples": [
-       "COMMON-0400"
-      ]
-     },
-     "reason": {
-      "type": "string",
-      "title": "Reason",
-      "examples": [
-       "INVALID_INPUT"
-      ]
-     },
-     "errors": {
-      "anyOf": [
-       {
-        "items": {
-         "$ref": "#/components/schemas/FieldError"
-        },
-        "type": "array"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Errors"
-     }
-    },
-    "type": "object",
-    "required": [
-     "title",
-     "status",
-     "detail",
-     "code",
-     "reason"
-    ],
-    "title": "Problem"
-   },
-   "RecognitionCandidate": {
-    "properties": {
-     "name": {
-      "type": "string",
-      "title": "Name"
-     },
-     "address": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Address"
-     },
-     "latitude": {
-      "type": "number",
-      "title": "Latitude"
-     },
-     "longitude": {
-      "type": "number",
-      "title": "Longitude"
-     },
-     "sourceUrl": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Sourceurl",
-      "description": "장소 상세 페이지 (카카오맵·네이버 등)"
-     },
-     "categoryLabel": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Categorylabel"
-     },
-     "categoryCode": {
-      "anyOf": [
-       {
-        "type": "string",
-        "enum": [
-         "MEAL",
-         "CAFE",
-         "BAR",
-         "ACTIVITY",
-         "CULTURE",
-         "WALK",
-         "SHOPPING"
-        ]
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Categorycode"
-     },
-     "openingHours": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Openinghours",
-      "description": "확보했을 때만. 없으면 앱이 '운영시간 확인 필요' 안내"
-     },
-     "distanceMeters": {
-      "anyOf": [
-       {
-        "type": "integer"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Distancemeters",
-      "description": "좌표 검색일 때 기준점까지 거리"
-     },
-     "savedPlaceId": {
-      "anyOf": [
-       {
-        "type": "integer"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Savedplaceid",
-      "description": "(확장) 요청의 savedPlaces 중 같은 장소가 있으면 그 placeId"
-     },
-     "matchType": {
-      "type": "string",
-      "enum": [
-       "EXACT",
-       "SIMILAR"
-      ],
-      "title": "Matchtype",
-      "description": "EXACT=확실한 일치(기본 선택) / SIMILAR=비슷한 이름"
-     },
-     "matchReasons": {
-      "items": {
-       "type": "string"
-      },
-      "type": "array",
-      "title": "Matchreasons",
-      "description": "주소 일치 · 이름 일치 · 이름 일부만 같아요 · 주소 다름 …"
-     }
-    },
-    "type": "object",
-    "required": [
-     "name",
-     "latitude",
-     "longitude",
-     "matchType"
-    ],
-    "title": "RecognitionCandidate"
-   },
-   "RecognitionGroup": {
-    "properties": {
-     "order": {
-      "type": "integer",
-      "title": "Order"
-     },
-     "extractedName": {
-      "type": "string",
-      "title": "Extractedname"
-     },
-     "extractedAddress": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Extractedaddress"
-     },
-     "status": {
-      "type": "string",
-      "enum": [
-       "MATCHED",
-       "SIMILAR_ONLY",
-       "NOT_FOUND"
-      ],
-      "title": "Status"
-     },
-     "best": {
-      "anyOf": [
-       {
-        "$ref": "#/components/schemas/RecognitionCandidate"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "description": "matchType=EXACT 1순위. 없으면 null"
-     },
-     "others": {
-      "items": {
-       "$ref": "#/components/schemas/RecognitionCandidate"
-      },
-      "type": "array",
-      "title": "Others"
-     }
-    },
-    "type": "object",
-    "required": [
-     "order",
-     "extractedName",
-     "status"
-    ],
-    "title": "RecognitionGroup",
-    "description": "(확장) 링크에 나온 장소 1곳 = 묶음 1개 (릴스 '맛집 4곳' 대응)."
-   },
-   "RecognitionRequest": {
-    "properties": {
-     "sourceUrl": {
-      "anyOf": [
-       {
-        "type": "string",
-        "maxLength": 2048
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Sourceurl"
-     },
-     "sharedText": {
-      "anyOf": [
-       {
-        "type": "string",
-        "maxLength": 20000
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Sharedtext",
-      "description": "공유 텍스트·캡션 (앱 '공유 → 복사' 문구 포함)"
-     },
-     "savedPlaces": {
-      "items": {
-       "$ref": "#/components/schemas/SavedPlaceIn"
-      },
-      "type": "array",
-      "maxItems": 500,
-      "title": "Savedplaces",
-      "description": "(확장) 보내면 같은 장소 후보에 savedPlaceId 표시"
-     }
-    },
-    "type": "object",
-    "title": "RecognitionRequest",
-    "description": "P03 링크·텍스트 인식. sourceUrl·sharedText 중 하나 이상 필수."
-   },
-   "RecognitionResponse": {
-    "properties": {
-     "status": {
-      "type": "string",
-      "enum": [
-       "CANDIDATES_FOUND",
-       "NEEDS_SEARCH"
-      ],
-      "title": "Status"
-     },
-     "extractedQuery": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Extractedquery",
-      "description": "직접 검색 화면에 미리 채울 검색어"
-     },
-     "candidates": {
-      "items": {
-       "$ref": "#/components/schemas/RecognitionCandidate"
-      },
-      "type": "array",
-      "title": "Candidates",
-      "description": "모든 묶음의 best → others 순"
-     },
-     "sourceUrl": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Sourceurl"
-     },
-     "message": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Message"
-     },
-     "groups": {
-      "items": {
-       "$ref": "#/components/schemas/RecognitionGroup"
-      },
-      "type": "array",
-      "title": "Groups"
-     }
-    },
-    "type": "object",
-    "required": [
-     "status"
-    ],
-    "title": "RecognitionResponse"
-   },
-   "RecommendedCourseOut": {
-    "properties": {
-     "candidateKey": {
-      "type": "string",
-      "title": "Candidatekey",
-      "description": "이번 응답에서 코스를 구분하는 값. 영구 courseId 아님"
-     },
-     "title": {
-      "type": "string",
-      "title": "Title"
-     },
-     "places": {
-      "items": {
-       "$ref": "#/components/schemas/CoursePlaceOut"
-      },
-      "type": "array",
-      "title": "Places"
-     },
-     "walkingLegs": {
-      "items": {
-       "$ref": "#/components/schemas/WalkingLegOut"
-      },
-      "type": "array",
-      "title": "Walkinglegs"
-     },
-     "totalWalkingMinutes": {
-      "type": "integer",
-      "title": "Totalwalkingminutes"
-     }
-    },
-    "type": "object",
-    "required": [
-     "candidateKey",
-     "title",
-     "places",
-     "walkingLegs",
-     "totalWalkingMinutes"
-    ],
-    "title": "RecommendedCourseOut"
-   },
-   "RegionList": {
-    "properties": {
-     "items": {
-      "items": {
-       "$ref": "#/components/schemas/RegionOut"
-      },
-      "type": "array",
-      "title": "Items"
-     }
-    },
-    "type": "object",
-    "required": [
-     "items"
-    ],
-    "title": "RegionList"
-   },
-   "RegionOut": {
-    "properties": {
-     "regionId": {
-      "type": "string",
-      "title": "Regionid"
-     },
-     "name": {
-      "type": "string",
-      "title": "Name"
-     },
-     "latitude": {
-      "type": "number",
-      "title": "Latitude"
-     },
-     "longitude": {
-      "type": "number",
-      "title": "Longitude"
-     },
-     "radiusMeters": {
-      "type": "integer",
-      "title": "Radiusmeters"
-     }
-    },
-    "type": "object",
-    "required": [
-     "regionId",
-     "name",
-     "latitude",
-     "longitude",
-     "radiusMeters"
-    ],
-    "title": "RegionOut"
-   },
-   "ReplacementCandidate": {
-    "properties": {
-     "name": {
-      "type": "string",
-      "title": "Name"
-     },
-     "address": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Address"
-     },
-     "latitude": {
-      "type": "number",
-      "title": "Latitude"
-     },
-     "longitude": {
-      "type": "number",
-      "title": "Longitude"
-     },
-     "sourceUrl": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Sourceurl",
-      "description": "장소 상세 페이지 (카카오맵·네이버 등)"
-     },
-     "categoryLabel": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Categorylabel"
-     },
-     "categoryCode": {
-      "anyOf": [
-       {
-        "type": "string",
-        "enum": [
-         "MEAL",
-         "CAFE",
-         "BAR",
-         "ACTIVITY",
-         "CULTURE",
-         "WALK",
-         "SHOPPING"
-        ]
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Categorycode"
-     },
-     "openingHours": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Openinghours",
-      "description": "확보했을 때만. 없으면 앱이 '운영시간 확인 필요' 안내"
-     },
-     "distanceMeters": {
-      "anyOf": [
-       {
-        "type": "integer"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Distancemeters",
-      "description": "좌표 검색일 때 기준점까지 거리"
-     },
-     "savedPlaceId": {
-      "anyOf": [
-       {
-        "type": "integer"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Savedplaceid",
-      "description": "(확장) 요청의 savedPlaces 중 같은 장소가 있으면 그 placeId"
-     },
-     "placeSource": {
-      "type": "string",
-      "enum": [
-       "PERSONAL",
-       "SHARED",
-       "EXTERNAL"
-      ],
-      "title": "Placesource"
-     },
-     "placeId": {
-      "anyOf": [
-       {
-        "type": "integer"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Placeid"
-     },
-     "walkFromPrevMinutes": {
-      "anyOf": [
-       {
-        "type": "integer"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Walkfromprevminutes"
-     },
-     "walkToNextMinutes": {
-      "anyOf": [
-       {
-        "type": "integer"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Walktonextminutes"
-     }
-    },
-    "type": "object",
-    "required": [
-     "name",
-     "latitude",
-     "longitude",
-     "placeSource"
-    ],
-    "title": "ReplacementCandidate"
-   },
-   "ReplacementRequest": {
-    "properties": {
-     "coursePlaces": {
-      "items": {
-       "$ref": "#/components/schemas/PlaceSnapshotIn"
-      },
-      "type": "array",
-      "maxItems": 5,
-      "minItems": 1,
-      "title": "Courseplaces",
-      "description": "지금 코스 장소 (방문 순서대로)"
-     },
-     "replaceVisitOrder": {
-      "type": "integer",
-      "maximum": 5.0,
-      "minimum": 1.0,
-      "title": "Replacevisitorder",
-      "description": "교체할 장소의 방문 순서 (1부터)"
-     },
-     "categoryCode": {
-      "anyOf": [
-       {
-        "type": "string",
-        "enum": [
-         "MEAL",
-         "CAFE",
-         "BAR",
-         "ACTIVITY",
-         "CULTURE",
-         "WALK",
-         "SHOPPING"
-        ]
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Categorycode",
-      "description": "없으면 교체할 장소와 같은 카테고리"
-     },
-     "savedPlaces": {
-      "items": {
-       "$ref": "#/components/schemas/SavedPlaceIn"
-      },
-      "type": "array",
-      "maxItems": 500,
-      "title": "Savedplaces"
-     },
-     "size": {
-      "type": "integer",
-      "maximum": 20.0,
-      "minimum": 1.0,
-      "title": "Size",
-      "default": 8
-     }
-    },
-    "type": "object",
-    "required": [
-     "coursePlaces",
-     "replaceVisitOrder"
-    ],
-    "title": "ReplacementRequest",
-    "description": "(확장) 코스 편집 '교체': 앞·뒤 장소 양쪽에서 도보 10분 이내인 후보."
-   },
-   "ReplacementResponse": {
-    "properties": {
-     "items": {
-      "items": {
-       "$ref": "#/components/schemas/ReplacementCandidate"
-      },
-      "type": "array",
-      "title": "Items"
-     }
-    },
-    "type": "object",
-    "required": [
-     "items"
-    ],
-    "title": "ReplacementResponse"
-   },
-   "SavedPlaceIn": {
-    "properties": {
-     "placeId": {
-      "type": "integer",
-      "exclusiveMinimum": 0.0,
-      "title": "Placeid",
-      "description": "Spring 의 장소 ID (공동 장소도 이 값 하나로 식별)"
-     },
-     "source": {
-      "type": "string",
-      "enum": [
-       "PERSONAL",
-       "SHARED"
-      ],
-      "title": "Source",
-      "default": "PERSONAL"
-     },
-     "name": {
-      "type": "string",
-      "maxLength": 255,
-      "minLength": 1,
-      "title": "Name"
-     },
-     "address": {
-      "anyOf": [
-       {
-        "type": "string",
-        "maxLength": 500
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Address"
-     },
-     "latitude": {
-      "type": "number",
-      "maximum": 90.0,
-      "minimum": -90.0,
-      "title": "Latitude"
-     },
-     "longitude": {
-      "type": "number",
-      "maximum": 180.0,
-      "minimum": -180.0,
-      "title": "Longitude"
-     },
-     "categoryCode": {
-      "anyOf": [
-       {
-        "type": "string",
-        "enum": [
-         "MEAL",
-         "CAFE",
-         "BAR",
-         "ACTIVITY",
-         "CULTURE",
-         "WALK",
-         "SHOPPING"
-        ]
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Categorycode",
-      "description": "있으면 그대로 사용, 없으면 AI 가 검색으로 추론"
-     }
-    },
-    "type": "object",
-    "required": [
-     "placeId",
-     "name",
-     "latitude",
-     "longitude"
-    ],
-    "title": "SavedPlaceIn",
-    "description": "Spring 이 보내는 저장 장소 1곳 (개인 또는 공동). AI 서버는 저장하지 않는다."
-   },
-   "ValidationError": {
-    "properties": {
-     "loc": {
-      "items": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "integer"
-        }
-       ]
-      },
-      "type": "array",
-      "title": "Location"
-     },
-     "msg": {
-      "type": "string",
-      "title": "Message"
-     },
-     "type": {
-      "type": "string",
-      "title": "Error Type"
-     }
-    },
-    "type": "object",
-    "required": [
-     "loc",
-     "msg",
-     "type"
-    ],
-    "title": "ValidationError"
-   },
-   "WalkingLegOut": {
-    "properties": {
-     "fromVisitOrder": {
-      "type": "integer",
-      "title": "Fromvisitorder"
-     },
-     "toVisitOrder": {
-      "type": "integer",
-      "title": "Tovisitorder"
-     },
-     "estimatedMinutes": {
-      "type": "integer",
-      "title": "Estimatedminutes"
-     }
-    },
-    "type": "object",
-    "required": [
-     "fromVisitOrder",
-     "toVisitOrder",
-     "estimatedMinutes"
-    ],
-    "title": "WalkingLegOut"
-   }
-  }
- }
 }

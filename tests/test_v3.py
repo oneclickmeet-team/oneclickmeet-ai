@@ -3,13 +3,11 @@ from __future__ import annotations
 
 import io
 import json
-import threading
 import urllib.error
 import urllib.request
 
 import pytest
 
-from placeflow.v3 import api as v3api
 from placeflow.v3.domain import (Anchor, Course, CourseStop, DomainError, Place, add_item, add_stop, remove_stop,
                                  reorder_stops, replace_stop, summarize, update_item, validate_for_save)
 from placeflow.v3.recommend import RecommendRequest, candidate_key_of, recommend, replacement_candidates
@@ -257,7 +255,7 @@ def test_candidates_from_empty_records(demo):
     assert candidates_from_records([], demo, "link").status == "link_unreadable"
 
 
-# ------------------------------------------------------------------ 서비스 · HTTP
+# ------------------------------------------------------------------ 서비스
 def test_service_flow(svc):
     svc.seed_demo("me", "YEONNAM")
     pid = svc.list_saved("me")["items"][0]["place"]["place_id"]
@@ -273,62 +271,6 @@ def test_service_flow(svc):
         svc.save_course("me", saved["course"], expected_version=0)
     with pytest.raises(DomainError):
         svc.get_course("intruder", saved["course"]["course_id"])
-
-
-@pytest.fixture
-def http_server(tmp_path):
-    from http.server import ThreadingHTTPServer
-
-    from placeflow.server import Handler
-
-    v3api.use_repo(JsonRepo(tmp_path / "h.json"), "demo")
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    t = threading.Thread(target=httpd.serve_forever, daemon=True)
-    t.start()
-    yield f"http://127.0.0.1:{httpd.server_address[1]}/api/v3"
-    httpd.shutdown()
-    httpd.server_close()
-
-
-def _call(base, method, path, body=None):
-    data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(base + path, data=data, method=method,
-                                 headers={"Content-Type": "application/json"} if data else {})
-    try:
-        with urllib.request.urlopen(req) as r:
-            return r.status, json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        return e.code, json.loads(e.read())
-
-
-def test_http_endpoints(http_server):
-    b = http_server
-    assert _call(b, "POST", "/dev/seed", {"region_id": "HYEHWA"})[0] == 200
-    s, r = _call(b, "GET", "/regions")
-    assert next(x for x in r["data"]["regions"] if x["region_id"] == "HYEHWA")["saved_count"] == 4
-    s, r = _call(b, "GET", "/places/search?q=" + urllib.request.quote("혜화 카페"))
-    assert r["ok"] and r["data"]["status"] == "candidates" and r["data"]["candidates"][0]["place"]["subtitle"]
-    s, r = _call(b, "GET", "/saved-places")
-    pid = r["data"]["items"][0]["place"]["place_id"]
-    s, r = _call(b, "GET", "/places/" + pid)
-    assert r["data"]["hearted"] and "hours_notice" in r["data"]["place"]
-    anchor = {"type": "place", "place_id": pid}
-    rec = _call(b, "POST", "/recommendations", {"anchor": anchor, "place_count": 3,
-                                                 "category_sequence": ["MEAL", "CAFE", "WALK"],
-                                                 "required_place_order": 1})[1]["data"]
-    assert rec["reason"] is None and rec["courses"]
-    d = _call(b, "POST", "/courses/draft", {"recommended": rec["courses"][0], "anchor": anchor})[1]["data"]
-    s, r = _call(b, "POST", "/courses", {"course": d["course"]})
-    cid, course = r["data"]["course"]["course_id"], r["data"]["course"]
-    assert _call(b, "PUT", "/courses/" + cid, {"course": course, "expected_version": 1})[0] == 200
-    s, r = _call(b, "PUT", "/courses/" + cid, {"course": course, "expected_version": 1})
-    assert s == 409 and r["error"]["code"] == "version_conflict"
-    few = dict(course, stops=course["stops"][:2], items=[])
-    s, r = _call(b, "PUT", "/courses/" + cid, {"course": few, "expected_version": 2})
-    assert s == 422 and r["error"]["code"] == "too_few_stops"
-    assert _call(b, "GET", "/nope")[0] == 404
-    assert _call(b, "POST", "/recommendations", {})[1]["error"]["code"] == "invalid_input"
-    assert _call(b, "DELETE", "/courses/" + cid)[1]["data"]["deleted"]
 
 
 # ------------------------------------------------------------------ OCR 보강 (상호명이 깨진 플레이스 캡쳐)
@@ -369,7 +311,7 @@ def test_garbled_place_capture_resolves_by_address():
 def test_share_text_used_when_link_blocked_by_robots():
     from placeflow.fetchers.http import ROBOTS_BLOCKED, HttpResponse
     from placeflow.pipeline import Pipeline
-    from placeflow.v3.api import split_share_text
+    from placeflow.v3.save_flow import split_share_text
 
     url, rest = split_share_text("[네이버 지도]\n삼형제쭈꾸미 대학로점\n서울 종로구 동숭길 68\nhttps://naver.me/5abcDEF")
     assert url == "https://naver.me/5abcDEF" and "삼형제쭈꾸미 대학로점" in rest
@@ -533,25 +475,28 @@ def test_kakao_http_error(monkeypatch):
 
 
 def test_provider_selection(monkeypatch):
-    from placeflow.v3.search import KakaoLocalSearch, NaverLocalSearch, get_search_provider
+    """v2.1: 장소 검색은 카카오 고정 (네이버 키만 있으면 데모, naver 지정은 오류)."""
+    from placeflow.v3.search import KakaoLocalSearch, get_search_provider
 
     for k in ("SEARCH_PROVIDER", "KAKAO_REST_API_KEY", "NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET"):
         monkeypatch.delenv(k, raising=False)
     assert get_search_provider().name == "demo"
     monkeypatch.setenv("NAVER_CLIENT_ID", "a")
     monkeypatch.setenv("NAVER_CLIENT_SECRET", "b")
-    assert isinstance(get_search_provider(), NaverLocalSearch)
+    assert get_search_provider().name == "demo"               # 네이버 키는 장소 검색에 안 씀
     monkeypatch.setenv("KAKAO_REST_API_KEY", "k")
     assert isinstance(get_search_provider(), KakaoLocalSearch)
-    monkeypatch.setenv("SEARCH_PROVIDER", "naver")          # 명시하면 그 하나만
-    assert isinstance(get_search_provider(), NaverLocalSearch)
+    monkeypatch.setenv("SEARCH_PROVIDER", "demo")             # 명시하면 그 하나만
+    assert get_search_provider().name == "demo"
     assert get_search_provider("demo_fail").name == "demo_fail"
+    with pytest.raises(ValueError, match="카카오"):
+        get_search_provider("naver")
     with pytest.raises(ValueError):
         get_search_provider("google")
 
 
-def test_naver_style_nearby_uses_region_name(demo):
-    """좌표 검색이 없는 제공자: 가까운 지원 지역명 + 검색어, 지역 밖은 빈 결과."""
+def test_demo_nearby_uses_region_name(demo):
+    """좌표 검색이 없는 데모 제공자: 가까운 지원 지역명 + 검색어, 지역 밖은 빈 결과."""
     r = get_region("YEONNAM")
     near = demo.nearby(r.lat, r.lng, 1000, code="CAFE")
     assert near and all(p.category_code == "CAFE" and distance_m((r.lat, r.lng), p.pos) <= 1000 for p in near)
@@ -570,3 +515,63 @@ def test_category_inference(demo):
     unknown = Place(place_id="sp:3", name="ZZZ", lat=37.0, lng=127.0, provider="backend")
     assert infer_category(unknown, demo).category_code is None
     assert with_code(unknown, "WALK").category_code == "WALK"
+
+
+# ------------------------------------------------------------------ 해시태그로만 가게를 적은 캡션 (인스타 '잠실 맛집 베스트 9')
+def test_hashtag_only_caption():
+    from pathlib import Path
+
+    from placeflow.pipeline import Pipeline
+    from placeflow.v3.domain import Place
+    from placeflow.v3.save_flow import candidates_from_records
+
+    caption = (Path(__file__).parent / "fixtures" / "ig_songridan_hashtags.txt").read_text(encoding="utf-8")
+    recs = Pipeline().run(caption).records
+    names = [r.place.name for r in recs]
+    assert names == ["장미맨숀", "쿠차라", "배키욘방", "차알", "단디", "팔레트커리", "미자식당", "라이언하트", "니엔테"]
+    assert all("지역 단서: 잠실" in r.content.evidence for r in recs)          # #잠실맛집·#송리단길 → 지역 단서
+    assert not {"잠실맛집", "잠실맛집추천", "송리단길맛집", "송리단길"} & set(names)  # 일반·지역 태그는 이름 아님
+
+    def P(i, name, road, cat="restaurant"):
+        return Place(place_id=i, name=name, road_address=road, category=cat, lat=37.51, lng=127.1, provider="kakao_local")
+    db = [P("k", "쿠차라 잠실점", "서울 송파구 백제고분로45길 3"), P("d1", "단디", "서울 송파구 오금로16길 9"),
+          P("d2", "단디", "부산 해운대구 구남로 1"), P("c", "차알 송리단길점", "서울 송파구 백제고분로41길 8", "cafe")]
+    s = _FakeNaver(db)
+    res = candidates_from_records(recs, s, "link")
+    by = {g.extracted.name: g for g in res.groups}
+    assert s.calls[0] == "잠실 장미맨숀" and "잠실 쿠차라" in s.calls             # 지역 단서로 검색 범위를 좁힘
+    assert by["쿠차라"].status == "matched" and by["쿠차라"].best.place.name == "쿠차라 잠실점"
+    assert by["차알"].best.place.name == "차알 송리단길점"
+    assert by["장미맨숀"].status == "not_found" and by["니엔테"].status == "not_found"
+
+
+def test_hashtags_ignored_when_caption_has_place_markers():
+    from pathlib import Path
+
+    from placeflow.pipeline import Pipeline
+
+    caption = (Path(__file__).parent / "fixtures" / "ig_jamsil_4places.txt").read_text(encoding="utf-8")
+    recs = Pipeline().run(caption).records                                    # 번호 목록이 있으면 해시태그는 안 씀
+    assert all(not any(e.startswith("해시태그") for e in r.content.evidence) for r in recs)
+
+
+def test_instagram_link_hashtag_caption_from_og_meta():
+    """실제 인스타 링크 응답 형태: og:title 이 'Instagram의 ○○님 : "캡션"' 이어도 제목을 상호명으로 쓰지 않고 해시태그를 읽음."""
+    import html as h
+    from pathlib import Path
+
+    from placeflow.fetchers.http import HttpResponse
+    from placeflow.pipeline import Pipeline
+
+    cap = (Path(__file__).parent / "fixtures" / "ig_songridan_hashtags.txt").read_text(encoding="utf-8").strip()
+    desc = f'1,619 likes, 610 comments - inssa_elf - May 21, 2020: "{cap}". '
+    title = f'Instagram의 인싸요정🧚🏻님 : "{cap}"'
+    page = (f'<html><head><meta property="og:title" content="{h.escape(title)}">'
+            f'<meta property="og:description" content="{h.escape(desc)}"></head><body></body></html>')
+
+    class Client:
+        def get(self, u):
+            return HttpResponse(u, u, 200, page)
+
+    recs = Pipeline(http=Client()).run("https://www.instagram.com/p/CAch34iB5RW/?utm_source=ig_web_copy_link").records
+    assert [r.place.name for r in recs][:3] == ["장미맨숀", "쿠차라", "배키욘방"] and len(recs) == 9

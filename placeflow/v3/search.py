@@ -1,15 +1,14 @@
-"""장소 검색 제공자 (V3: 네이버 지역검색).
+"""장소 검색 제공자 (v2.1: 카카오 로컬로 고정).
 
 쓰이는 곳
   - 직접 검색 (장소 이름·주소로 찾기)
   - 링크/스크린샷에서 뽑은 이름 → 후보 확인 목록
-  - 코스 추천의 '외부 추천' 후보 수집 (지역명 + 업종 검색어 여러 개)
+  - 코스 추천의 '외부 추천' 후보 수집 (좌표 주변 카테고리·검색어)
 
-제공자 (환경변수 SEARCH_PROVIDER 로 하나만 선택: kakao | naver | demo | demo_fail. 실행 중 자동 전환 없음)
+제공자 (환경변수 SEARCH_PROVIDER: kakao | demo | demo_fail. 실행 중 자동 전환 없음)
   KakaoLocalSearch  카카오 로컬 API 키워드·카테고리 검색 (KAKAO_REST_API_KEY). 좌표·반경 검색 지원, 한 번에 15건
-  NaverLocalSearch  네이버 검색 API '지역' (NAVER_CLIENT_ID / NAVER_CLIENT_SECRET)
-                    - 한 번에 최대 5건, 좌표 기반 주변 검색은 없음 → 가까운 지원 지역명 + 검색어로 모은 뒤 거리로 거름
   DemoSearch        키 없이 화면을 확인하기 위한 가상 데이터 (지원 지역 6곳 × 16곳, 이름은 모두 가상)
+네이버 API 는 장소 검색에 쓰지 않고, 블로그 검색으로 장소 태그를 만드는 데만 쓴다 (blog_tags.py).
 
 place_id 는 제공자와 관계없이 'nv_' + sha1(공백 뺀 이름|도로명주소) — 같은 가게면 같은 ID (영구 외부 ID 를 저장하지 않음)
 
@@ -52,7 +51,7 @@ class SearchProvider(Protocol):
 
 def _region_nearby(provider, lat: float, lng: float, radius_m: int, code: Optional[str], query: Optional[str],
                    limit: int, per_query: int) -> list[Place]:
-    """좌표 검색이 없는 제공자(네이버·데모)용: 가까운 지원 지역명 + 검색어로 모은 뒤 반경으로 거름.
+    """좌표 검색이 없는 제공자(데모)용: 가까운 지원 지역명 + 검색어로 모은 뒤 반경으로 거름.
     지원 지역 밖 좌표는 빈 결과."""
     from .categories import SEARCH_PLAN
 
@@ -83,94 +82,6 @@ def _area_from(jibun: str | None, road: str | None) -> str | None:
             if re.search(r"(동|가)$", tok) and not re.search(r"(시|군|구)$", tok) and len(tok) <= 6:
                 return re.sub(r"\d+가$", "", tok) or tok
     return None
-
-
-def _classify(category_text: str | None, name: str) -> tuple[str, str | None, str]:
-    cat = taxonomy.classify_text(category_text, name) or ("other", "other")
-    label = taxonomy.PRIMARY[cat[0]]["label"]
-    return cat[0], cat[1], label
-
-
-# ---------------------------------------------------------------- 네이버
-class NaverLocalSearch:
-    """네이버 지역검색.
-
-    endpoint="hub"    (기본) NAVER API HUB — 네이버 클라우드 플랫폼 콘솔에서 발급한 키.
-                      2026-07-31 부터 개발자센터 신규 발급이 끝나 새 키는 모두 HUB 키입니다.
-    endpoint="legacy" 개발자센터(developers.naver.com) 기존 키. 2027-06-30 까지 사용 가능.
-    환경변수: NAVER_CLIENT_ID, NAVER_CLIENT_SECRET, (선택) NAVER_SEARCH_ENDPOINT=hub|legacy
-    """
-
-    name = "naver_local"
-    ENDPOINTS = {
-        "hub": ("https://naverapihub.apigw.ntruss.com/search/v1/local", "X-NCP-APIGW-API-KEY-ID",
-                "X-NCP-APIGW-API-KEY", "&format=json"),
-        "legacy": ("https://openapi.naver.com/v1/search/local.json", "X-Naver-Client-Id", "X-Naver-Client-Secret", ""),
-    }
-
-    def __init__(self, client_id: str | None = None, client_secret: str | None = None, timeout: float = 6.0,
-                 cache_ttl: int = 6 * 3600, endpoint: str | None = None):
-        self.cid = client_id or os.environ.get("NAVER_CLIENT_ID")
-        self.secret = client_secret or os.environ.get("NAVER_CLIENT_SECRET")
-        if not (self.cid and self.secret):
-            raise ValueError("NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 환경변수가 필요합니다 (.env)")
-        self.endpoint = (endpoint or os.environ.get("NAVER_SEARCH_ENDPOINT") or "hub").strip().lower()
-        if self.endpoint not in self.ENDPOINTS:
-            raise ValueError("NAVER_SEARCH_ENDPOINT 는 hub 또는 legacy 여야 합니다")
-        self.timeout = timeout
-        self.cache_ttl = cache_ttl
-        self._cache: dict[str, tuple[float, list[Place]]] = {}
-
-    @staticmethod
-    def _coord(v) -> float | None:
-        if v in (None, ""):
-            return None
-        f = float(v)
-        return f / 1e7 if abs(f) > 1000 else f  # 현재 응답은 WGS84 ×1e7 정수
-
-    def _to_place(self, it: dict) -> Place | None:
-        name = re.sub(r"<[^>]+>", "", it.get("title") or "").strip()
-        lat, lng = self._coord(it.get("mapy")), self._coord(it.get("mapx"))
-        if not name or lat is None or lng is None:
-            return None
-        road, jibun = it.get("roadAddress") or None, it.get("address") or None
-        cat, sub, label = _classify(it.get("category"), name)
-        return Place(place_id=make_place_id(name, road, jibun), name=name, category=cat, sub_category=sub,
-                     category_label=label, area_label=_area_from(jibun, road), road_address=road,
-                     jibun_address=jibun, lat=lat, lng=lng, phone=it.get("telephone") or None,
-                     map_url=it.get("link") or None, provider=self.name)
-
-    def search(self, query: str, display: int = 5) -> list[Place]:
-        q = query.strip()
-        if not q:
-            return []
-        hit = self._cache.get(q)
-        if hit and time.time() - hit[0] < self.cache_ttl:
-            return hit[1][:display]
-        base, id_header, secret_header, extra = self.ENDPOINTS[self.endpoint]
-        url = f"{base}?query={urllib.parse.quote(q)}&display={min(max(display, 1), 5)}&sort=random{extra}"
-        req = urllib.request.Request(url, headers={id_header: self.cid, secret_header: self.secret})
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:
-                data = json.loads(r.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            detail = ""
-            try:  # HUB: {"error": {...}} / 개발자센터: {"errorCode", "errorMessage"}
-                body = json.loads(e.read().decode("utf-8"))
-                err = body.get("error") if isinstance(body.get("error"), dict) else body
-                detail = " " + str(err.get("message") or err.get("errorMessage") or err.get("errorCode") or "")
-            except Exception:
-                pass
-            hint = " (키·엔드포인트 확인: NAVER_SEARCH_ENDPOINT)" if e.code in (401, 403) else ""
-            raise ExternalSearchError(f"네이버 지역검색 HTTP {e.code}{detail.rstrip()}{hint}") from e
-        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as e:
-            raise ExternalSearchError(f"네이버 지역검색 연결 실패: {e}") from e
-        places = [p for p in (self._to_place(it) for it in data.get("items", [])) if p]
-        self._cache[q] = (time.time(), places)
-        return places
-
-    def nearby(self, lat, lng, radius_m=1000, code=None, query=None, limit=30):
-        return _region_nearby(self, lat, lng, radius_m, code, query, limit, 5)
 
 
 # ---------------------------------------------------------------- 카카오
@@ -351,25 +262,20 @@ class DemoSearch:
 
 
 def get_search_provider(name: str | None = None):
-    """SEARCH_PROVIDER 환경변수(또는 인자)로 하나를 고른다: kakao | naver | demo | demo_fail.
-    지정하지 않으면(auto) 시작할 때 한 번 정함: 카카오 키 → 카카오, 네이버 키 → 네이버, 둘 다 없으면 데모.
-    실행 중 다른 제공자로 자동 전환하지 않는다."""
+    """SEARCH_PROVIDER 환경변수(또는 인자)로 하나를 고른다: kakao | demo | demo_fail.
+    지정하지 않으면(auto) 카카오 키가 있으면 카카오, 없으면 데모. 실행 중 다른 제공자로 자동 전환하지 않는다."""
     name = (name or "auto").lower()
     if name == "auto":
         name = (os.environ.get("SEARCH_PROVIDER") or "auto").lower()
     if name == "auto":
-        if os.environ.get("KAKAO_REST_API_KEY"):
-            name = "kakao"
-        elif os.environ.get("NAVER_CLIENT_ID") and os.environ.get("NAVER_CLIENT_SECRET"):
-            name = "naver"
-        else:
-            name = "demo"
+        name = "kakao" if os.environ.get("KAKAO_REST_API_KEY") else "demo"
     if name in ("kakao", "kakao_local"):
         return KakaoLocalSearch()
-    if name in ("naver", "naver_local"):
-        return NaverLocalSearch()
     if name == "demo":
         return DemoSearch()
     if name == "demo_fail":
         return DemoSearch(fail=True)
-    raise ValueError(f"알 수 없는 검색 제공자: {name} (kakao | naver | demo | demo_fail)")
+    if name in ("naver", "naver_local"):
+        raise ValueError("v2.1 부터 장소 검색은 카카오로 고정입니다 (SEARCH_PROVIDER=kakao). "
+                         "네이버 키는 블로그 태그(BLOG_TAGS)에만 쓰입니다.")
+    raise ValueError(f"알 수 없는 검색 제공자: {name} (kakao | demo | demo_fail)")

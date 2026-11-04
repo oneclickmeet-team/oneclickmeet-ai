@@ -1,10 +1,10 @@
-# OneClickMeet AI 워크플로우 v2.0 — AI 내부 API 및 코드 컨벤션
+# OneClickMeet AI 워크플로우 v2.1 — AI 내부 API 및 코드 컨벤션
 
 > **범위:** Spring Boot → FastAPI **AI 내부 API**만 다룬다(장소 후보·인식·코스 추천). 회원·보관함·코스 저장·공유는 Spring Boot 소관이다(TRD 부록 A).
 > - 기준 문서: 원클릭밋 TRD v1.0 (2026-10-18). 앱이 부르는 공개 API(`/api/v1`)는 TRD 부록 A를 따른다.
 > - 구현: AI 로직 `placeflow/v3/` · AI 내부 서버 `placeflow/ai_api/` (Python 3.10+, FastAPI, pydantic v2)
 > - 실행: `python -m placeflow api --port 8001` → Swagger `http://127.0.0.1:8001/docs`, 명세 파일 `docs/openapi.json`
-> - "V3"는 Figma 와이어프레임 버전이고, 워크플로우 버전은 **v2.0**이다.
+> - "V3"는 Figma 와이어프레임 버전이고, 워크플로우 버전은 **v2.1**이다.
 
 ---
 
@@ -14,7 +14,8 @@
 [React Native] ──/api/v1──▶ [Spring Boot]  인증·인가·업무 데이터(MySQL)
                                  │  저장 장소를 요청에 담아 보냄
                                  └──/internal/v1──▶ [FastAPI AI]  placeflow.ai_api → placeflow.v3
-                                                       ├─ 장소 검색: 카카오 로컬 또는 네이버 지역검색 (SEARCH_PROVIDER)
+                                                       ├─ 장소 검색: 카카오 로컬 (고정)
+                                                       ├─ 장소 태그: 네이버 블로그 검색 제목·요약 → OpenAI 가 태그 12개 중 판단
                                                        ├─ 인식: 링크 메타·공유 텍스트·스크린샷 OCR → 후보 매칭
                                                        └─ 추천: 카테고리 순서 + 필수 장소 위치 → 도보 코스
 ```
@@ -63,7 +64,7 @@
 | 404 | `COMMON-0404` / `RESOURCE_NOT_FOUND` | 필수 장소 정보가 요청에 없음 |
 | 413 | `PLACE-0413` / `IMAGE_TOO_LARGE` | 이미지 장당 5MiB 초과 (`AI_MAX_IMAGE_MB`) |
 | 415 | `PLACE-0415` / `UNSUPPORTED_IMAGE_TYPE` | JPEG·PNG·WebP가 아님 (파일 앞부분으로 판정) |
-| 503 | `EXTERNAL-0503` / `PROVIDER_UNAVAILABLE` | 카카오·네이버 검색 실패·한도 소진 |
+| 503 | `EXTERNAL-0503` / `PROVIDER_UNAVAILABLE` | 카카오 장소 검색 실패·한도 소진 (네이버 블로그·OpenAI 태그 실패는 503 이 아니라 태그만 빈 목록) |
 | 503 | `EXTERNAL-0503` / `RECOGNIZER_UNAVAILABLE` | 서버에 OCR(tesseract+kor) 없음 |
 | 500 | `COMMON-0500` / `INTERNAL_ERROR` | 예상하지 못한 오류 |
 
@@ -135,7 +136,7 @@
 
 - 응답은 `{ "items": [PlaceCandidate], "page": 0, "size": 15, "hasNext": false }`이다.
 - 키워드와 좌표를 함께 보내면 그 좌표 주변에서 키워드를 검색한다.
-- 키워드만 보낸 검색은 제공자 한 번 결과까지다(카카오 15건, 네이버 5건).
+- 키워드만 보낸 검색은 카카오 한 번 결과까지다(15건).
 - 외부 검색이 실패하면 503이다.
 
 ### 3.3 P03 링크·텍스트 인식 — `POST /internal/v1/place-recognitions`
@@ -148,20 +149,24 @@
 - `sharedText`에 앱 '공유 → 복사' 문구를 통째로 넣어도 된다. 첫 링크를 `sourceUrl`로 쓰고 나머지를 장소 단서로 쓴다.
 - **링크는 robots.txt를 지키며 메타 정보(og:title·og:description)만 읽는다.** 본문·가격·메뉴는 수집하지 않는다(TRD).
 - 네이버 지도처럼 robots.txt가 막은 링크와 로그인 벽이 있는 인스타는 공유 텍스트·캡션으로 진행한다.
+- 캡션에 번호 목록·📍 같은 장소 표시가 없고 가게가 해시태그로만 있으면(`#잠실맛집 #쿠차라 #배키욘방`), 일반·지역 태그를 뺀 해시태그를 장소 이름으로 쓰고 지역 태그(→ 잠실)를 검색어에 붙인다. 인스타 고정 댓글은 로그인이 필요해 읽지 않는다(앱에서 복사해 `sharedText`로 보내야 한다).
 
 응답:
 ```json
 {
   "status": "CANDIDATES_FOUND",
   "extractedQuery": "오지다",
-  "candidates": [ { "name": "오지다", "...": "PlaceCandidate", "matchType": "EXACT", "matchReasons": ["주소 일치", "이름 일치"] } ],
+  "candidates": [ { "name": "오지다", "...": "PlaceCandidate", "matchType": "EXACT", "matchReasons": ["주소 일치", "이름 일치"],
+                   "tags": [ { "label": "음식이 맛있어요", "mentionCount": 12 }, { "label": "양이 많아요", "mentionCount": 5 } ],
+                   "tagPostCount": 31 } ],
   "sourceUrl": "https://www.instagram.com/reel/DegiE1ozc74/",
   "message": null,
   "groups": [
     { "order": 1, "extractedName": "오지다", "extractedAddress": "서울 송파구 백제고분로48길 24", "status": "MATCHED",
       "best": { "name": "오지다", "matchType": "EXACT", "matchReasons": ["주소 일치", "이름 일치"], "...": "" },
       "others": [ { "name": "회포차오지다", "matchType": "SIMILAR", "matchReasons": ["이름 일부만 같아요", "주소 다름"], "...": "" } ] }
-  ]
+  ],
+  "tagSource": "NAVER_BLOG"
 }
 ```
 
@@ -172,6 +177,17 @@
 | `groups` (확장) | 링크에 나온 장소 1곳 = 묶음 1개 (릴스 '맛집 4곳') | 장소별 묶음 + 여러 곳 저장 화면 |
 | `matchType` | `EXACT`(확실한 일치) / `SIMILAR`(비슷한 이름) | **EXACT만 기본 선택**. SIMILAR는 접어서 이유와 함께 |
 | `groups[].status` | `MATCHED` · `SIMILAR_ONLY` · `NOT_FOUND` | `NOT_FOUND`: "찾지 못했어요 · 직접 검색" |
+| `tags` (확장) | 해당 블로그 글이 많은 순 최대 5개 `{label, mentionCount}` | 저장할 때 장소 태그로 보관. "블로그 언급 기반" 표시 |
+| `tagPostCount` (확장) | OpenAI 에 보낸 블로그 글 수 (가게 이름이 나온 글) | 적으면(예: 3 미만) 숨기는 등 백엔드가 판단 |
+| `tagSource` (확장) | `NAVER_BLOG` / null | null: 태그 기능 꺼짐(네이버·OpenAI 키 없음) 또는 블로그 검색·OpenAI 판단이 모두 실패 |
+
+**장소 태그** (`placeflow/v3/blog_tags.py`, 태그 목록 `placeflow/v3/review_tags.json`)
+- 태그는 팀이 정한 **12개**이고 모든 카테고리에 공통으로 쓴다: 뷰가 좋아요 · 컨셉이 독특해요 · 사진이 잘나와요 · 차분한 분위기에요 · 야외공간이 멋져요 · 아늑해요 · 혼술하기 좋아요 · 집중하기 좋아요 · 음식이 맛있어요 · 양이 많아요 · 특별한 메뉴가 있어요 · 디저트가 맛있어요. 응답의 `label`은 이 문자열 그대로다. 목록과 LLM 용 설명(`hint`)은 `review_tags.json`에서 고친다.
+- '가게 이름 + 동네'로 네이버 블로그 검색(최대 50건, 정확도순) → 제목·요약에 가게 이름이 나온 글만 → **OpenAI(기본 `gpt-4o-mini`)가 글마다 그 가게를 긍정적으로 말하는 태그를 12개 중에서 고른다**(부정·다른 가게 이야기는 제외, JSON 스키마의 enum 으로 목록 밖 태그 차단) → 태그별 글 수를 세어 상위 5개. 장소 1곳당 OpenAI 1회 호출.
+- OpenAI 호출이 실패하면 규칙 기반으로 대신하지 않고 태그 없이 응답한다.
+- **블로그 본문은 읽지 않는다**(TRD). 네이버 플레이스의 실제 리뷰 선택 횟수가 아니라 **블로그 언급 수**다.
+- 우리 앱 사용자가 고른 태그 집계(B 단계)는 Spring이 DB로 처리하고, 언제 사용자 집계로 바꿔 보여줄지도 Spring이 정한다. FastAPI는 블로그 기반 태그만 만든다.
+- P04 스크린샷 인식에도 같은 필드가 붙는다. 같은 가게는 메모리 캐시 24시간(OpenAI 재호출 없음), 한 요청에서 최대 12곳까지 태그를 붙인다.
 
 **판정 규칙** (`save_flow.match`)
 - **EXACT**
@@ -276,21 +292,21 @@ httpx.post(f"{AI}/internal/v1/place-image-recognitions", headers={"X-AI-Key": KE
 - 주변 놀거리처럼 단순한 주변 검색은 P02(좌표)로 한다.
 
 ### 3.7 `GET /health` (인증 없음)
-`{ "status": "UP", "workflowVersion": "2.0", "searchProvider": "kakao_local", "extractor": "heuristic", "ocr": "auto", "ocrReady": true, "authRequired": true }`
+`{ "status": "UP", "workflowVersion": "2.1", "searchProvider": "kakao_local", "extractor": "heuristic", "ocr": "auto", "ocrReady": true, "authRequired": true, "tagProvider": "naver_blog" }`
 
 ---
 
-## 4. 장소 검색 제공자
+## 4. 외부 API 역할
 
-| `SEARCH_PROVIDER` | 키 | 좌표 검색 |
-|---|---|---|
-| `kakao` | `KAKAO_REST_API_KEY` (카카오 디벨로퍼스 앱 → 카카오맵 사용 설정 ON) | 지원 (반경·카테고리 그룹) |
-| `naver` | `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET` (NAVER API HUB) | 없음 → **가까운 지원 지역명 + 검색어**로 모은 뒤 반경으로 거름. 지원 지역 밖은 빈 결과 |
-| `demo` / `demo_fail` | 없음 | 가상 데이터 / 외부 실패 흉내 |
+| 용도 | API | 키 | 비고 |
+|---|---|---|---|
+| 장소 검색 (P02·P03·P04·R01) | 카카오 로컬 | `KAKAO_REST_API_KEY` (카카오 디벨로퍼스 앱 → 카카오맵 사용 설정 ON) | 좌표·반경·카테고리 그룹 검색. 무료 쿼터는 계정의 첫 앱에만 |
+| 장소 태그 (P03·P04) | 네이버 블로그 검색 | `NAVER_CLIENT_ID`·`NAVER_CLIENT_SECRET` (NAVER API HUB, 검색 > 블로그 추가) | 하루 25,000회. 키가 없으면 태그 없이 동작 |
+| 태그 판단 (P03·P04) | OpenAI | `OPENAI_API_KEY`, 모델 `TAG_LLM_MODEL`(기본 `gpt-4o-mini`) | **유료**(장소 1곳당 1회). 키가 없으면 태그 없이 동작 |
 
-- **하나만 쓴다.** 실행 중 다른 제공자로 자동 전환하지 않는다.
-- `SEARCH_PROVIDER`를 비우면 시작할 때 한 번 정한다: 카카오 키가 있으면 kakao, 네이버 키만 있으면 naver, 둘 다 없으면 demo.
-- `place_id`(내부)는 제공자와 관계없이 이름 + 도로명주소 해시라서, 같은 가게면 같은 값이다.
+- `SEARCH_PROVIDER`: `kakao` · `demo`(가상 데이터) · `demo_fail`(외부 실패 흉내). 비우면 카카오 키가 있으면 kakao, 없으면 demo. 실행 중 자동 전환 없음.
+- v2.1부터 네이버 지역검색은 장소 검색에 쓰지 않는다(`SEARCH_PROVIDER=naver`는 시작 오류).
+- `place_id`(내부)는 이름 + 도로명주소 해시라서, 같은 가게면 같은 값이다.
 
 ---
 
@@ -298,12 +314,15 @@ httpx.post(f"{AI}/internal/v1/place-image-recognitions", headers={"X-AI-Key": KE
 
 | 이름 | 용도 | 기본 |
 |---|---|---|
-| `SEARCH_PROVIDER` | `kakao` · `naver` · `demo` · `demo_fail` | 키 있는 것 |
+| `SEARCH_PROVIDER` | `kakao` · `demo` · `demo_fail` | 카카오 키 있으면 kakao |
 | `KAKAO_REST_API_KEY` | 카카오 로컬 | — |
-| `NAVER_CLIENT_ID` · `NAVER_CLIENT_SECRET` · `NAVER_SEARCH_ENDPOINT` | 네이버 지역검색 (`hub` 기본 / `legacy`) | — |
+| `NAVER_CLIENT_ID` · `NAVER_CLIENT_SECRET` · `NAVER_SEARCH_ENDPOINT` | 네이버 블로그 검색 → 장소 태그 (`hub` 기본 / `legacy`) | — |
+| `OPENAI_API_KEY` · `TAG_LLM_MODEL` | 태그 판단 LLM | gpt-4o-mini |
+| `BLOG_TAGS` | `off`면 키가 있어도 태그 끄기 | 켬 |
 | `AI_SERVICE_KEY` | 설정하면 `X-AI-Key` 필수 | 끔 |
 | `AI_LLM` · `AI_LLM_MODEL` | 추출기 `heuristic` · `openai` · `anthropic` · `gemini` | heuristic |
 | `AI_OCR` · `AI_OCR_CONCURRENCY` · `TESSDATA_PREFIX` | OCR 설정 | auto · 2 |
+| `AI_VISION_FALLBACK` · `AI_VISION_FALLBACK_MODEL` | OCR + 규칙 기반으로 추출하지 못한 캡쳐만 다시 읽을 비전 LLM (`openai` · `anthropic` · `gemini`) | none |
 | `AI_MAX_IMAGE_MB` | 이미지 장당 최대 크기 | 5 |
 | `AI_CORS_ORIGINS` | 허용 출처(쉼표 구분). 백엔드끼리만 호출하므로 기본은 끔 | — |
 
@@ -314,7 +333,7 @@ httpx.post(f"{AI}/internal/v1/place-image-recognitions", headers={"X-AI-Key": KE
 ## 6. Python 모듈 (AI 로직)
 
 ```python
-from placeflow.v3.search import get_search_provider          # kakao | naver | demo | demo_fail
+from placeflow.v3.search import get_search_provider          # kakao | demo | demo_fail
 search = get_search_provider()
 search.search("잠실 카페", 5)                                   # 키워드 → list[Place]
 search.nearby(37.51, 127.10, 1000, code="CAFE", query=None)    # 좌표 주변 → 가까운 순
@@ -323,6 +342,7 @@ from placeflow.v3.recommend import RecommendRequest, recommend  # R01 엔진 (�
 from placeflow.v3.save_flow import candidates_from_records, match  # 인식 후보 매칭
 from placeflow.v3.category_infer import infer_category          # 카테고리 없는 저장 장소 추론
 from placeflow.v3.categories import CODES, LABELS, SEARCH_PLAN  # 카테고리 7개와 검색 계획
+from placeflow.v3.blog_tags import get_tagger, LLMTagJudge     # 블로그 제목·요약 → OpenAI 태그 판단
 ```
 
 ---
@@ -331,7 +351,7 @@ from placeflow.v3.categories import CODES, LABELS, SEARCH_PLAN  # 카테고리 7
 
 ```bash
 python3 -m pip install -r requirements-api.txt
-python3 -m pytest -q tests/test_v3.py tests/test_ai_api.py   # 엔진·매칭·카카오(가짜 HTTP)·내부 API 계약
+python3 -m pytest -q tests/test_v3.py tests/test_ai_api.py tests/test_blog_tags.py   # 엔진·매칭·카카오/네이버 블로그(가짜 HTTP)·내부 API 계약
 python3 -m placeflow api --port 8001                         # → /docs 에서 직접 호출
 ```
 
@@ -340,6 +360,7 @@ python3 -m placeflow api --port 8001                         # → /docs 에서 
 ## 8. 미정·주의
 
 - 카카오·네이버 실제 키로는 개발 환경에서 호출을 확인하지 못했다(네트워크 제한). 응답 파싱은 공개 문서 기준이고, 테스트는 가짜 HTTP 응답으로 했다.
+- 태그 품질은 LLM 판단과 블로그 요약 길이에 좌우된다. 요약이 짧아서 글이 적은 가게는 태그가 비거나 적다.
 - 지원 지역 6곳의 중심 좌표·반경은 근사값이다.
 - 카테고리 추론(방법 b)은 검색 품질에 좌우된다. DB에 `categoryCode`를 두면(방법 a) 더 정확하고 외부 호출도 줄어든다.
 - 외부 후보 저장·캐시 범위는 제공자 약관 확인 후 정한다. 지금은 메모리 캐시 6시간만 쓴다.

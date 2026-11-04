@@ -109,9 +109,18 @@ class RecognitionRequest(CamelModel):
                                              description="(확장) 보내면 같은 장소 후보에 savedPlaceId 표시")
 
 
+class PlaceTag(CamelModel):
+    """(확장) 네이버 블로그 제목·요약을 OpenAI 가 읽고 고른 장소 태그. 네이버의 실제 리뷰 선택 횟수가 아니다."""
+    label: str = Field(..., description="태그 (예: 분위기가 좋아요)")
+    mention_count: int = Field(..., ge=1, description="이 태그에 해당한다고 판단된 블로그 글 수")
+
+
 class RecognitionCandidate(PlaceCandidate):
     match_type: Literal["EXACT", "SIMILAR"] = Field(..., description="EXACT=확실한 일치(기본 선택) / SIMILAR=비슷한 이름")
     match_reasons: list[str] = Field(default_factory=list, description="주소 일치 · 이름 일치 · 이름 일부만 같아요 · 주소 다름 …")
+    tags: list[PlaceTag] = Field(default_factory=list,
+                                 description="(확장) 블로그 언급이 많은 순 최대 5개. 태그 기능이 꺼졌거나 언급이 없으면 []")
+    tag_post_count: Optional[int] = Field(None, description="(확장) 태그를 센 블로그 글 수 (가게 이름이 나온 글). 태그를 못 구했으면 null")
 
 
 class RecognitionGroup(CamelModel):
@@ -131,6 +140,8 @@ class RecognitionResponse(CamelModel):
     source_url: Optional[str] = None
     message: Optional[str] = None
     groups: list[RecognitionGroup] = Field(default_factory=list)
+    tag_source: Optional[Literal["NAVER_BLOG"]] = Field(
+        None, description="(확장) 태그 출처. 태그 기능이 꺼졌거나 블로그 검색이 모두 실패하면 null (인식 결과는 그대로)")
 
 
 # ------------------------------------------------------------------ 코스 추천
@@ -221,3 +232,4 @@ class Health(CamelModel):
     ocr: str
     ocr_ready: bool
     auth_required: bool
+    tag_provider: Optional[str] = Field(None, description="(확장) 장소 태그 제공자. 예: naver_blog+openai:gpt-4o-mini / 꺼져 있으면 null")
