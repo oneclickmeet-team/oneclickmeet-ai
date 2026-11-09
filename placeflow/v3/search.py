@@ -10,7 +10,8 @@
   DemoSearch        키 없이 화면을 확인하기 위한 가상 데이터 (지원 지역 6곳 × 16곳, 이름은 모두 가상)
 네이버 API 는 장소 검색에 쓰지 않고, 블로그 검색으로 장소 태그를 만드는 데만 쓴다 (blog_tags.py).
 
-place_id 는 제공자와 관계없이 'nv_' + sha1(공백 뺀 이름|도로명주소) — 같은 가게면 같은 ID (영구 외부 ID 를 저장하지 않음)
+place_id 는 제공자와 관계없이 'nv_' + sha1(공백 뺀 이름|도로명주소) — 같은 가게면 같은 ID (AI 내부 식별용)
+provider_place_id 는 제공자의 장소 ID (카카오 id) — Spring 이 보관함 저장 키(providerPlaceId)로 씀. 데모는 place_id 를 넣음
 
 공통 메서드
   search(query, display)                              키워드 검색 → list[Place]
@@ -145,7 +146,8 @@ class KakaoLocalSearch:
         return Place(place_id=make_place_id(name, road, jibun), name=name, category=cat, sub_category=sub,
                      category_label=taxonomy.PRIMARY[cat]["label"], area_label=_area_from(jibun, road),
                      road_address=road, jibun_address=jibun, lat=lat, lng=lng, phone=d.get("phone") or None,
-                     map_url=d.get("place_url") or None, provider="kakao_local")
+                     map_url=d.get("place_url") or None, provider="kakao_local",
+                     provider_place_id=str(d["id"]) if d.get("id") else None)
 
     def search(self, query: str, display: int = 5) -> list[Place]:
         q = query.strip()
@@ -219,6 +221,7 @@ def _demo_places() -> list[Place]:
             out.append(Place(place_id=make_place_id(name, road), name=name, category=cat, sub_category=sub,
                              category_label=taxonomy.PRIMARY[cat]["label"], area_label=r.area_query,
                              road_address=road, lat=round(lat, 6), lng=round(lng, 6), provider="demo",
+                             provider_place_id=make_place_id(name, road),
                              opening_hours=hours_mod.parse_hours(hrs) if hrs else None))
     return out
 

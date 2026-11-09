@@ -90,11 +90,15 @@
 ### PlaceCandidate — 저장 전 확인용 후보 (TRD CandidateSearchResponse.items)
 ```json
 { "name": "오지다", "address": "서울특별시 송파구 백제고분로48길 24", "latitude": 37.5131, "longitude": 127.1123,
-  "sourceUrl": "http://place.map.kakao.com/1", "categoryLabel": "맛집", "categoryCode": "MEAL",
+  "sourceUrl": "http://place.map.kakao.com/123456789",
+  "provider": "KAKAO", "providerPlaceId": "123456789",
+  "roadAddress": "서울특별시 송파구 백제고분로48길 24", "jibunAddress": "서울 송파구 방이동 44-1",
+  "categoryLabel": "맛집", "categoryCode": "MEAL",
   "openingHours": null, "distanceMeters": 120, "savedPlaceId": null }
 ```
-- 후보는 `placeId`를 갖는 저장 본문이 아니다. 사용자가 고른 후보의 `name`·`address`·`latitude`·`longitude`·`sourceUrl`을 Spring P06·T02에 전달한다.
-- 영구 외부 ID는 내보내지 않는다.
+- 후보는 `placeId`를 갖는 저장 본문이 아니다. 사용자가 고른 후보의 `providerPlaceId`·`name`·`roadAddress`·`jibunAddress`·`latitude`·`longitude`·`sourceUrl`을 Spring 보관함 저장에 전달한다.
+- `provider`·`providerPlaceId` (2026-11-06 추가): 장소 정보 제공자(`KAKAO` · 데모 데이터는 `DEMO`)와 제공자 장소 ID(카카오 장소 `id`). Spring 보관함의 저장 키다. 링크에서만 읽고 검색으로 확인하지 못한 장소는 둘 다 null이다.
+- `roadAddress`·`jibunAddress` (2026-11-06 추가): 도로명·지번 주소를 나눠 준다. 없는 쪽은 null. `address`는 표시용 한 줄(도로명, 없으면 지번)로 그대로 남겨 둔다.
 - `openingHours`는 확보했을 때만 들어간다. 없으면 앱이 "운영시간 확인 필요"를 안내한다.
 - `distanceMeters`는 좌표 검색일 때만, `savedPlaceId`는 (확장) 요청에 `savedPlaces`를 보냈을 때만 채워진다. `savedPlaceId`는 이름이 같고 80m 이내인 저장 장소의 `placeId`다.
 
@@ -261,9 +265,11 @@ httpx.post(f"{AI}/internal/v1/place-image-recognitions", headers={"X-AI-Key": KE
       "title": "연남 맛집·카페·놀거리·술집 코스",
       "places": [
         { "visitOrder": 1, "name": "연남 파스타집", "address": "...", "latitude": 37.5626, "longitude": 126.9255,
-          "categoryCode": "MEAL", "categoryLabel": "맛집", "source": "PERSONAL", "placeId": 12, "isAnchor": false, "sourceUrl": null },
+          "categoryCode": "MEAL", "categoryLabel": "맛집", "source": "PERSONAL", "placeId": 12, "isAnchor": false, "sourceUrl": null,
+          "provider": null, "providerPlaceId": null, "roadAddress": "...", "jibunAddress": null },
         { "visitOrder": 2, "name": "연남 감성 카페", "source": "PERSONAL", "placeId": 41, "isAnchor": true, "...": "" },
-        { "visitOrder": 3, "name": "연남 포토부스", "source": "EXTERNAL", "placeId": null, "isAnchor": false, "...": "" },
+        { "visitOrder": 3, "name": "연남 포토부스", "source": "EXTERNAL", "placeId": null, "isAnchor": false,
+          "provider": "KAKAO", "providerPlaceId": "987654321", "...": "" },
         { "visitOrder": 4, "name": "연남 와인바", "source": "SHARED", "placeId": 81, "isAnchor": false, "...": "" } ],
       "walkingLegs": [ { "fromVisitOrder": 1, "toVisitOrder": 2, "estimatedMinutes": 5 }, { "...": "" } ],
       "totalWalkingMinutes": 20 } ],
@@ -276,6 +282,7 @@ httpx.post(f"{AI}/internal/v1/place-image-recognitions", headers={"X-AI-Key": KE
   - `UNSUPPORTED_REGION`: 지원 지역 밖
   - `NO_MORE_COURSES`: (확장) 다시 추천에서 더 없음
 - `placeId`·`source`(확장): 저장 장소면 요청에서 받은 `placeId`를 그대로 돌려준다. 외부 후보는 `placeId`가 null이고 `source`는 `EXTERNAL`이다.
+- `provider`·`providerPlaceId`·`roadAddress`·`jibunAddress`: 외부 후보에 채워진다(PlaceCandidate와 같은 뜻). 외부 후보를 코스로 저장하려면 이 값으로 먼저 보관함에 저장한다. 저장 장소는 Spring이 가진 값을 쓰므로 `provider`·`providerPlaceId`가 null이고, `roadAddress`에는 요청에서 받은 `address`가 들어간다.
 - 잘못된 형식은 400, 필수 장소 정보 없음은 404, 외부 검색 실패는 503이다. 외부 장애를 유효한 추천처럼 돌려주지 않는다.
 
 **추천 규칙** (`placeflow/v3/recommend.py`)
@@ -316,7 +323,7 @@ httpx.post(f"{AI}/internal/v1/place-image-recognitions", headers={"X-AI-Key": KE
 
 - `SEARCH_PROVIDER`: `kakao` · `demo`(가상 데이터) · `demo_fail`(외부 실패 흉내). 비우면 카카오 키가 있으면 kakao, 없으면 demo. 실행 중 자동 전환 없음.
 - v2.1부터 네이버 지역검색은 장소 검색에 쓰지 않는다(`SEARCH_PROVIDER=naver`는 시작 오류).
-- `place_id`(내부)는 이름 + 도로명주소 해시라서, 같은 가게면 같은 값이다.
+- `place_id`(내부)는 이름 + 도로명주소 해시라서, 같은 가게면 같은 값이다. 응답에는 내보내지 않고, 대신 카카오 장소 ID를 `providerPlaceId`로 내보낸다.
 
 ---
 

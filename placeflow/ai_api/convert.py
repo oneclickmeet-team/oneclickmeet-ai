@@ -53,6 +53,16 @@ def find_saved(p: Place, saved: list[SavedPlaceIn]) -> Optional[int]:
     return None
 
 
+_PROVIDER_OUT = {"kakao_local": "KAKAO", "demo": "DEMO"}
+
+
+def place_ids(p: Place) -> dict:
+    """제공자·제공자 장소 ID·도로명/지번 주소 (후보·코스 장소 공통). 저장 장소(backend)·링크 장소는 제공자 null."""
+    provider = _PROVIDER_OUT.get(p.provider)
+    return dict(provider=provider, provider_place_id=p.provider_place_id if provider else None,
+                road_address=p.road_address, jibun_address=p.jibun_address)
+
+
 def candidate(p: Place, center: Optional[tuple[float, float]] = None,
               saved: Optional[list[SavedPlaceIn]] = None, cls=PlaceCandidate, **extra):
     hours = hours_mod.summary(p.opening_hours) if p.opening_hours and not p.opening_hours.partial else None
@@ -60,7 +70,7 @@ def candidate(p: Place, center: Optional[tuple[float, float]] = None,
                source_url=p.map_url, category_label=p.category_label if p.category != "other" else None,
                category_code=p.category_code, opening_hours=hours,
                distance_meters=round(distance_m(center, p.pos)) if center else None,
-               saved_place_id=find_saved(p, saved) if saved else None, **extra)
+               saved_place_id=find_saved(p, saved) if saved else None, **place_ids(p), **extra)
 
 
 def _rcand(c: Candidate, saved: list[SavedPlaceIn], tags: Optional[dict] = None) -> RecognitionCandidate:
@@ -111,7 +121,7 @@ def recommendation(res: RecommendResult, by_key: dict[str, SavedPlaceIn]) -> Cou
                 latitude=rp.place.lat, longitude=rp.place.lng, category_code=rp.place.category_code,
                 category_label=rp.place.category_label if rp.place.category != "other" else None,
                 source=_SRC_OUT[rp.source], place_id=s.place_id if s else None, is_anchor=rp.is_anchor,
-                source_url=rp.place.map_url))
+                source_url=rp.place.map_url, **place_ids(rp.place)))
         courses.append(RecommendedCourseOut(
             candidate_key=c.candidate_key, title=c.title, places=places, total_walking_minutes=c.total_walk_min,
             walking_legs=[WalkingLegOut(from_visit_order=l.from_visit_order, to_visit_order=l.to_visit_order,

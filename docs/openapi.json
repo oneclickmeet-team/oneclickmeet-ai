@@ -1066,20 +1066,20 @@
         "properties": {
           "image": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Image",
             "description": "스크린샷 (JPEG·PNG·WebP)"
           },
-          "extra_images": {
+          "extraImages": {
             "items": {
               "type": "string",
-              "format": "binary"
+              "contentMediaType": "application/octet-stream"
             },
             "type": "array",
-            "title": "Extra Images",
+            "title": "Extraimages",
             "description": "(확장) 같은 장소의 추가 화면 최대 4장"
           },
-          "shared_text": {
+          "sharedText": {
             "anyOf": [
               {
                 "type": "string"
@@ -1088,7 +1088,7 @@
                 "type": "null"
               }
             ],
-            "title": "Shared Text",
+            "title": "Sharedtext",
             "description": "(확장) 함께 붙여넣은 캡션"
           }
         },
@@ -1191,7 +1191,60 @@
                 "type": "null"
               }
             ],
-            "title": "Address"
+            "title": "Address",
+            "description": "도로명 주소, 없으면 지번 주소 (표시용 한 줄)"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "KAKAO",
+                  "DEMO"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider",
+            "description": "장소 정보 제공자. 링크에서만 읽은 장소는 null"
+          },
+          "providerPlaceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Providerplaceid",
+            "description": "제공자 장소 ID (카카오 장소 id). Spring 보관함 저장 키. 제공자가 없으면 null"
+          },
+          "roadAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadaddress",
+            "description": "도로명 주소"
+          },
+          "jibunAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jibunaddress",
+            "description": "지번 주소"
           },
           "latitude": {
             "type": "number",
@@ -1501,7 +1554,8 @@
                 "type": "null"
               }
             ],
-            "title": "Address"
+            "title": "Address",
+            "description": "도로명 주소, 없으면 지번 주소 (표시용 한 줄)"
           },
           "latitude": {
             "type": "number",
@@ -1522,6 +1576,58 @@
             ],
             "title": "Sourceurl",
             "description": "장소 상세 페이지 (카카오맵·네이버 등)"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "KAKAO",
+                  "DEMO"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider",
+            "description": "장소 정보 제공자. 링크에서만 읽은 장소는 null"
+          },
+          "providerPlaceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Providerplaceid",
+            "description": "제공자 장소 ID (카카오 장소 id). Spring 보관함 저장 키. 제공자가 없으면 null"
+          },
+          "roadAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadaddress",
+            "description": "도로명 주소"
+          },
+          "jibunAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jibunaddress",
+            "description": "지번 주소"
           },
           "categoryLabel": {
             "anyOf": [
@@ -1793,7 +1899,8 @@
                 "type": "null"
               }
             ],
-            "title": "Address"
+            "title": "Address",
+            "description": "도로명 주소, 없으면 지번 주소 (표시용 한 줄)"
           },
           "latitude": {
             "type": "number",
@@ -1814,6 +1921,58 @@
             ],
             "title": "Sourceurl",
             "description": "장소 상세 페이지 (카카오맵·네이버 등)"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "KAKAO",
+                  "DEMO"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider",
+            "description": "장소 정보 제공자. 링크에서만 읽은 장소는 null"
+          },
+          "providerPlaceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Providerplaceid",
+            "description": "제공자 장소 ID (카카오 장소 id). Spring 보관함 저장 키. 제공자가 없으면 null"
+          },
+          "roadAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadaddress",
+            "description": "도로명 주소"
+          },
+          "jibunAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jibunaddress",
+            "description": "지번 주소"
           },
           "categoryLabel": {
             "anyOf": [
@@ -2211,7 +2370,8 @@
                 "type": "null"
               }
             ],
-            "title": "Address"
+            "title": "Address",
+            "description": "도로명 주소, 없으면 지번 주소 (표시용 한 줄)"
           },
           "latitude": {
             "type": "number",
@@ -2232,6 +2392,58 @@
             ],
             "title": "Sourceurl",
             "description": "장소 상세 페이지 (카카오맵·네이버 등)"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "KAKAO",
+                  "DEMO"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider",
+            "description": "장소 정보 제공자. 링크에서만 읽은 장소는 null"
+          },
+          "providerPlaceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Providerplaceid",
+            "description": "제공자 장소 ID (카카오 장소 id). Spring 보관함 저장 키. 제공자가 없으면 null"
+          },
+          "roadAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadaddress",
+            "description": "도로명 주소"
+          },
+          "jibunAddress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jibunaddress",
+            "description": "지번 주소"
           },
           "categoryLabel": {
             "anyOf": [
@@ -2534,6 +2746,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",

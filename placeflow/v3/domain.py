@@ -66,6 +66,7 @@ class Place(BaseModel):
     phone: Optional[str] = None
     map_url: Optional[str] = None
     provider: str = Field("kakao_local", description="kakao_local | demo | link | backend")
+    provider_place_id: Optional[str] = Field(None, description="제공자 장소 ID (카카오 장소 id). 링크·백엔드 장소는 None")
     opening_hours: Optional[WeeklyHours] = None
     tags: list[dict] = Field(default_factory=list,
                              description="블로그 태그 [{label, mention_count}] (링크·스크린샷으로 찾을 때 붙음, 저장 시 함께 보관)")

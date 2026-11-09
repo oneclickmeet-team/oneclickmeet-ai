@@ -62,10 +62,14 @@ class PlaceSnapshotIn(CamelModel):
 class PlaceCandidate(CamelModel):
     """저장 전 확인용 장소 후보 (TRD CandidateSearchResponse.items). placeId 를 갖는 저장 본문이 아니다."""
     name: str
-    address: Optional[str] = None
+    address: Optional[str] = Field(None, description="도로명 주소, 없으면 지번 주소 (표시용 한 줄)")
     latitude: float
     longitude: float
     source_url: Optional[str] = Field(None, description="장소 상세 페이지 (카카오맵·네이버 등)")
+    provider: Optional[Literal["KAKAO", "DEMO"]] = Field(None, description="장소 정보 제공자. 링크에서만 읽은 장소는 null")
+    provider_place_id: Optional[str] = Field(None, description="제공자 장소 ID (카카오 장소 id). Spring 보관함 저장 키. 제공자가 없으면 null")
+    road_address: Optional[str] = Field(None, description="도로명 주소")
+    jibun_address: Optional[str] = Field(None, description="지번 주소")
     category_label: Optional[str] = None
     category_code: Optional[CategoryCode] = None
     opening_hours: Optional[str] = Field(None, description="확보했을 때만. 없으면 앱이 '운영시간 확인 필요' 안내")
@@ -171,7 +175,11 @@ class CourseRecommendationRequest(CamelModel):
 class CoursePlaceOut(CamelModel):
     visit_order: int
     name: str
-    address: Optional[str] = None
+    address: Optional[str] = Field(None, description="도로명 주소, 없으면 지번 주소 (표시용 한 줄)")
+    provider: Optional[Literal["KAKAO", "DEMO"]] = Field(None, description="장소 정보 제공자. 링크에서만 읽은 장소는 null")
+    provider_place_id: Optional[str] = Field(None, description="제공자 장소 ID (카카오 장소 id). Spring 보관함 저장 키. 제공자가 없으면 null")
+    road_address: Optional[str] = Field(None, description="도로명 주소")
+    jibun_address: Optional[str] = Field(None, description="지번 주소")
     latitude: float
     longitude: float
     category_code: Optional[CategoryCode] = None

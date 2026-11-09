@@ -31,7 +31,8 @@ def _png() -> bytes:
 
 
 def mk(i, name, road, cat="restaurant", lat=37.5131, lng=127.1123):
-    return Place(place_id=i, name=name, road_address=road, category=cat, lat=lat, lng=lng, provider="kakao_local")
+    return Place(place_id=i, name=name, road_address=road, category=cat, lat=lat, lng=lng, provider="kakao_local",
+                 provider_place_id=f"kk_{i}", jibun_address=f"서울 송파구 방이동 {ord(i)}")
 
 
 JAMSIL = [mk("a", "오지다", "서울특별시 송파구 백제고분로48길 24"),
@@ -383,3 +384,44 @@ def test_recognition_tags_off_or_failed(make_client):
     j = r.json()
     assert j["status"] == "CANDIDATES_FOUND" and j["tagSource"] is None
     assert all(x["tags"] == [] for x in j["candidates"])
+
+
+# ------------------------------------------------------------------ 제공자 장소 ID · 도로명/지번 주소
+def test_kakao_document_keeps_id_and_both_addresses():
+    from placeflow.v3.search import KakaoLocalSearch
+
+    p = KakaoLocalSearch._to_place({"id": "123456789", "place_name": "오지다", "x": "127.1123", "y": "37.5131",
+                                    "road_address_name": "서울 송파구 백제고분로48길 24",
+                                    "address_name": "서울 송파구 방이동 44-1",
+                                    "place_url": "http://place.map.kakao.com/123456789",
+                                    "category_name": "음식점 > 한식", "category_group_code": "FD6"})
+    assert p.provider_place_id == "123456789"
+    assert p.road_address == "서울 송파구 백제고분로48길 24" and p.jibun_address == "서울 송파구 방이동 44-1"
+
+
+def test_candidates_expose_provider_id_and_addresses(make_client):
+    c = make_client()
+    item = c.get(f"{P}/place-candidates", params={"query": "리사르커피"}).json()["items"][0]
+    assert item["provider"] == "KAKAO" and item["providerPlaceId"] == "kk_f"
+    assert item["roadAddress"] == "서울특별시 송파구 올림픽로35길 112 B동" and item["jibunAddress"].startswith("서울 송파구 방이동")
+    assert item["address"] == item["roadAddress"]
+    d = c.post(f"{P}/place-recognitions", json={"sharedText": CAPTION}).json()
+    best = d["groups"][0]["best"]
+    assert best["providerPlaceId"] == "kk_a" and best["provider"] == "KAKAO" and best["roadAddress"]
+    assert all(x["providerPlaceId"] for x in d["candidates"])
+
+
+def test_course_places_expose_provider_id(make_client):
+    demo = DemoSearch()
+    c = make_client(search=demo)
+    saved = _saved(demo, {"연남 감성 카페"})
+    body = {"anchor": {"type": "PLACE", "placeId": saved[0]["placeId"]}, "placeCount": 3,
+            "categorySequence": ["MEAL", "CAFE", "WALK"], "requiredPlaceOrder": 2, "savedPlaces": saved}
+    d = c.post(f"{P}/course-recommendations", json=body).json()
+    assert d["courses"]
+    for co in d["courses"]:
+        for p in co["places"]:
+            if p["source"] == "EXTERNAL":
+                assert p["provider"] == "DEMO" and p["providerPlaceId"] and p["roadAddress"]
+            else:  # 저장 장소는 Spring 이 가진 값을 쓰므로 제공자 정보 없음
+                assert p["provider"] is None and p["providerPlaceId"] is None and p["placeId"]
