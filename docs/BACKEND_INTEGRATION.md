@@ -137,7 +137,7 @@ Spring이 할 일:
 - `status = NEEDS_SEARCH`면 앱에 직접 검색 화면으로 보내고, 검색창에 `extractedQuery`를 넣어 주세요. 오류가 아니라 200입니다.
 - `matchType`: `EXACT`만 기본 선택, `SIMILAR`는 접어서 `matchReasons`와 함께 보여 주는 것을 권장합니다.
 - `groups`: 릴스 하나에 가게가 여러 곳 나올 때(예: '맛집 4곳') 장소별로 묶은 결과입니다. 여러 곳 저장 화면을 만들 거면 `groups`를, 아니면 `candidates`만 써도 됩니다.
-- `tags`: 블로그 언급 기반 태그(최대 5개). 저장할 때 같이 보관할지는 백엔드가 정합니다. `tagPostCount`가 적으면(예: 3 미만) 숨기는 것을 권장합니다.
+- `tags`: 블로그 언급 기반 태그(최대 5개). 저장할 때 같이 보관할지는 백엔드가 정합니다. `tagPostCount`가 3 미만이면 AI 서버가 `tags`를 `[]`로 내려 주므로(2026-11-10), 받은 값을 그대로 쓰면 됩니다.
 - AI 서버를 못 쓰면(연결 실패·503) 지금처럼 `SharedTextNameHeuristic` 또는 `NEEDS_SEARCH`로 내려가는 폴백은 그대로 유지하면 됩니다.
 
 ### 4.4 후보 → 보관함 저장(`SaveSavedPlaceRequest`) 필드 매핑
@@ -280,7 +280,7 @@ curl -s -X POST http://127.0.0.1:8001/internal/v1/course-recommendations \
 | ③ | 보관함에 `categoryCode`(7개 코드) 저장 여부 | 저장 권장 → 추천 정확도↑, AI의 카테고리 추론용 카카오 호출↓ |
 | ④ | 지역 ID 표기 (`SEONGSIN`/`SUNGSHIN`, `HANSEONG`/`HANSUNG`) | 한쪽으로 통일. 바꾸는 쪽 합의 |
 | ⑤ | 코스 추천 엔진: Spring 유지(A) vs AI R01 위임(B) | B. 앱 요청에 `placeCount`·`categorySequence`·`requiredPlaceOrder` 추가 필요 |
-| ⑥ | 블로그 태그(`tags`)를 보관함에 저장할지, 언제 숨길지 | `tagPostCount < 3`이면 숨김 |
+| ⑥ | 블로그 태그(`tags`)를 보관함에 저장할지, 언제 숨길지 | 숨김은 AI 서버가 처리(`tagPostCount < 3` → `tags: []`). 시연에서 태그를 보여 주므로 보관함 저장 필요 |
 | ⑦ | P03·P04 재시도 제거, read-timeout 30초 | 2절대로 |
 | ⑧ | `sharedText` 길이 제한 2,000 → 늘리기 | AI는 20,000자까지 받음 |
 | ⑨ | 비전 LLM 폴백(유료, 캡쳐 원본이 외부 LLM으로 전송) 운영에서 켤지 | 개인정보·비용 확인 후 결정 |

@@ -183,7 +183,7 @@
 | `matchType` | `EXACT`(확실한 일치) / `SIMILAR`(비슷한 이름) | **EXACT만 기본 선택**. SIMILAR는 접어서 이유와 함께 |
 | `groups[].status` | `MATCHED` · `SIMILAR_ONLY` · `NOT_FOUND` | `NOT_FOUND`: "찾지 못했어요 · 직접 검색" |
 | `tags` (확장) | 해당 블로그 글이 많은 순 최대 5개 `{label, mentionCount}` | 저장할 때 장소 태그로 보관. "블로그 언급 기반" 표시 |
-| `tagPostCount` (확장) | OpenAI 에 보낸 블로그 글 수 (가게 이름이 나온 글) | 적으면(예: 3 미만) 숨기는 등 백엔드가 판단 |
+| `tagPostCount` (확장) | OpenAI 에 보낸 블로그 글 수 (가게 이름이 나온 글) | **3 미만이면 AI 서버가 `tags`를 `[]`로 내려 준다**(2026-11-10). 백엔드는 받은 `tags`를 그대로 쓰면 된다 |
 | `tagSource` (확장) | `NAVER_BLOG` / null | null: 태그 기능 꺼짐(네이버·OpenAI 키 없음) 또는 블로그 검색·OpenAI 판단이 모두 실패 |
 
 **장소 태그** (`placeflow/v3/blog_tags.py`, 태그 목록 `placeflow/v3/review_tags.json`)
