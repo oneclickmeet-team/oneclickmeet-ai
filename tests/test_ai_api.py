@@ -318,6 +318,7 @@ class FakeBlog:
     POSTS = {
         "오지다": [("<b>오지다</b> 방이동 맛집", "음식이 맛있어요 양이 많아서 좋았고 조용한 편"),
                  ("송파 오지다 후기", "시그니처 모듬초밥, 음식이 정말 맛있었다"),
+                 ("오지다 재방문", "역시 양이 많아요"),
                  ("다른 가게 이야기", "음식이 맛있어요 혼술")],          # 가게 이름 없음 → 안 셈
         "리사르커피": [("리사르커피 잠실", "디저트도 맛있어요. 아늑하고 사진이 잘 나와요")],
     }
@@ -364,11 +365,11 @@ def test_recognition_has_blog_tags(make_client):
     assert j["tagSource"] == "NAVER_BLOG"
     by = {x["name"]: x for x in j["candidates"]}
     oj = by["오지다"]
-    assert oj["tagPostCount"] == 2
-    assert oj["tags"][0] == {"label": "음식이 맛있어요", "mentionCount": 2}
+    assert oj["tagPostCount"] == 3
+    assert oj["tags"][:2] == [{"label": "음식이 맛있어요", "mentionCount": 2}, {"label": "양이 많아요", "mentionCount": 2}]
     assert {"label": "특별한 메뉴가 있어요", "mentionCount": 1} in oj["tags"]
     assert {"label": "혼술하기 좋아요", "mentionCount": 1} not in oj["tags"]   # 이름 없는 글은 안 셈
-    assert [t["label"] for t in by["리사르커피"]["tags"]] == ["사진이 잘나와요", "아늑해요", "디저트가 맛있어요"]
+    assert by["리사르커피"]["tagPostCount"] == 1 and by["리사르커피"]["tags"] == []   # 글 3개 미만 → 태그 숨김
     assert len(blog.queries) == len(set(blog.queries))                 # 같은 가게는 한 번만 검색
     g = next(g for g in j["groups"] if g["best"] and g["best"]["name"] == "오지다")
     assert g["best"]["tags"] == oj["tags"]                             # 묶음 안 후보에도 같은 태그

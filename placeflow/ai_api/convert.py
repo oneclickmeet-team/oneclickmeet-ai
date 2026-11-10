@@ -73,11 +73,15 @@ def candidate(p: Place, center: Optional[tuple[float, float]] = None,
                saved_place_id=find_saved(p, saved) if saved else None, **place_ids(p), **extra)
 
 
+MIN_TAG_POSTS = 3  # 태그를 판단한 블로그 글이 이보다 적으면 태그를 내려 주지 않음 (근거 부족)
+
+
 def _rcand(c: Candidate, saved: list[SavedPlaceIn], tags: Optional[dict] = None) -> RecognitionCandidate:
     t = (tags or {}).get(c.place.place_id)
+    shown = t is not None and t.post_count >= MIN_TAG_POSTS
     return candidate(c.place, saved=saved, cls=RecognitionCandidate,
                      match_type="EXACT" if c.match_type == "exact" else "SIMILAR", match_reasons=c.reasons,
-                     tags=[PlaceTag(label=l, mention_count=n) for l, n in t.tags] if t else [],
+                     tags=[PlaceTag(label=l, mention_count=n) for l, n in t.tags] if shown else [],
                      tag_post_count=t.post_count if t else None)
 
 

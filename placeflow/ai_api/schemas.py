@@ -124,7 +124,7 @@ class RecognitionCandidate(PlaceCandidate):
     match_reasons: list[str] = Field(default_factory=list, description="주소 일치 · 이름 일치 · 이름 일부만 같아요 · 주소 다름 …")
     tags: list[PlaceTag] = Field(default_factory=list,
                                  description="(확장) 블로그 언급이 많은 순 최대 5개. 태그 기능이 꺼졌거나 언급이 없으면 []")
-    tag_post_count: Optional[int] = Field(None, description="(확장) 태그를 센 블로그 글 수 (가게 이름이 나온 글). 태그를 못 구했으면 null")
+    tag_post_count: Optional[int] = Field(None, description="(확장) 태그를 판단한 블로그 글 수 (가게 이름이 나온 글). 3개 미만이면 tags 는 [] 로 내려감. 태그를 못 구했으면 null")
 
 
 class RecognitionGroup(CamelModel):
